@@ -1,0 +1,197 @@
+<?xml version="1.0"?>
+<PluginConfig>
+	<Field id="rootZPIPNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Enter the IP address of any active ZonePlayer on the network . It is used to retrieve playlists, and other music server attributes.  A value of "auto" will randomly select an active ZonePlayer.  This should not be the ip address of a Sonos Bridge.</Label>
+	</Field>
+	<Field type="textfield" id="rootZPIP" defaultValue="auto" 
+		tooltip="The ip address of the reference ZonePlayer">
+        	<Label>Reference ZonePlayer IP:</Label>
+        </Field>
+    <Field id="simpleSeparator1" type="separator"/>
+    <Field id="EventProcesssorNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+    	<Label>Choose the event processor to listen for ZonePlayer changes.  SoCo is currently the only supported engine.  It will not not keep the UPNP discovery (1900) port open.</Label>
+    </Field>
+    <Field type="menu" id="EventProcessor" defaultValue="SoCo">
+    	<Label>Event Processor:</Label>
+    	<List>
+    		<Option value="SoCo">SoCo</Option>
+    	</List>
+    </Field>
+	<Field id="EventIPNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false" visibleBindingId="EventProcessor" visibleBindingValue="SoCo">
+		<Label>This is the IP address that will be used to listen for Sonos ZonePlayer events.  Enter the IP address of this Indigo server.</Label>
+	</Field>
+	<Field type="textfield" id="EventIP" visibleBindingId="EventProcessor" visibleBindingValue="SoCo" tooltip="Indigo server IP address">
+		<Label>Event Listener IP Address:</Label>
+	</Field>
+	<Field id="EventCheckNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false" visibleBindingId="EventProcessor" visibleBindingValue="SoCo">
+		<Label>Enter the interval in seconds to check that a ZonePlayer is alive.  Default value is 60 seconds.</Label>
+	</Field>
+	<Field type="textfield" id="EventCheck" defaultValue="60" visibleBindingId="EventProcessor" visibleBindingValue="SoCo" tooltip="Event Check Interval">
+		<Label>Event Check Interval:</Label>
+	</Field>
+	<Field id="SubscriptionCheckNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false" visibleBindingId="EventProcessor" visibleBindingValue="SoCo">
+		<Label>Enter the interval in seconds to check that a ZonePlayer subscription is active.  Default value is 15 seconds.</Label>
+	</Field>
+	<Field type="textfield" id="SubscriptionCheck" defaultValue="15" visibleBindingId="EventProcessor" visibleBindingValue="SoCo" tooltip="Subscription Check Interval">
+		<Label>Subscription Check Interval:</Label>
+	</Field>
+	<Field id="simpleSeparator2" type="separator"/>
+	<Field id="HTTPSStreamingIPNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>The plugin will spawn a simple HTTP server to stream mp3 files to a ZonePlayer.  This is used for Group Announcements.  Populate with "auto" to attempt to automatically figure out the IP address.  If the plugin reports issues, simply enter the IP address of the Indigo server.</Label>
+	</Field>
+	<Field type="textfield" id="HTTPStreamingIP" defaultValue="auto"
+		tooltip="The ip address of the Indigo server">
+		<Label>HTTP Streaming IP:</Label>
+	</Field>
+	<Field id="HTTPStreamingPortNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>This is the TCP port that goes along with the IP address.  It will default to 8888, but can be changed to another port if this conflicts with another service.</Label>
+	</Field>
+	<Field type="textfield" id="HTTPStreamingPort" defaultValue="8888" tooltip="The ip port to use for HTTP Streaming">
+		<Label>HTTP Streaming Port:</Label>
+	</Field>
+	<Field id="SoundFilePathNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>If you wish to play static mp3 files as part of an announcement to a ZonePlayer, enter the path of those files here.  The plugin will read the path on startup and scan for mp3 files.</Label>
+	</Field>
+	<Field id="SoundFilePath" type="textfield">
+		<Label>Sound File Path:</Label>
+	</Field>
+	<Field id="simpleSeparator3" type="separator"/>
+	<Field id="PandoraNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have an active Pandora account configured on the Sonos system.</Label>
+	</Field>
+	<Field type="checkbox" id="Pandora" tooltip="Pandora Account?">
+		<Label>Pandora:</Label>
+	</Field>
+	<Field id="PandoraEmailAddressNote" type="label" visibleBindingId="Pandora" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>This is the email address used to register on Pandora.  It is available on the "Setting" page on the Pandora site.</Label>
+	</Field>
+	<Field type="textfield" id="PandoraEmailAddress" tooltip="Pandora Email Address" visibleBindingId="Pandora" visibleBindingValue="true">
+        	<Label>Pandora Email Address:</Label>
+	</Field>
+	<Field type="textfield" secure="true" id="PandoraPassword"
+		tooltip="Pandora Password" visibleBindingId="Pandora" visibleBindingValue="true">
+        	<Label>Pandora Password:</Label>
+    </Field>
+	<Field id="PandoraNicknameNote" type="label" visibleBindingId="Pandora" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Choose a short name to appear in dropdown menus.  It will help to distinguish between Pandora accounts.</Label>
+	</Field>
+	<Field type="textfield" id="PandoraNickname" tooltip="Pandora Nickname" visibleBindingId="Pandora" visibleBindingValue="true">
+		<Label>Pandora Nickname:</Label>
+	</Field>
+	<Field id="PandoraNote2" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have a second active Pandora account configured on the Sonos system.</Label>
+	</Field>
+	<Field type="checkbox" id="Pandora2" tooltip="Second Pandora Account?">
+		<Label>Second Pandora:</Label>
+	</Field>    
+	<Field id="PandoraEmailAddressNote2" type="label" visibleBindingId="Pandora2" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>This is the email address used to register on Pandora.  It is available on the "Setting" page on the Pandora site.</Label>
+	</Field>
+	<Field type="textfield" id="PandoraEmailAddress2" tooltip="Pandora Email Address" visibleBindingId="Pandora2" visibleBindingValue="true">
+		<Label>Pandora Email Address:</Label>
+    </Field>
+	
+	<Field type="textfield" secure="true" id="PandoraPassword2" tooltip="Pandora Password" visibleBindingId="Pandora2" visibleBindingValue="true">
+        	<Label>Pandora Password:</Label>
+    	</Field>
+	<Field id="PandoraNicknameNote2" type="label" visibleBindingId="Pandora2" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Choose a short name to appear in dropdown menus.  It will help to distinguish between Pandora accounts.</Label>
+	</Field>
+	<Field type="textfield" id="PandoraNickname2" tooltip="Pandora Nickname" visibleBindingId="Pandora2" visibleBindingValue="true">
+        	<Label>Pandora Nickname:</Label>
+    	</Field>
+	<Field id="simpleSeparator4" type="separator"/>
+
+	<Field id="SiriusXMNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have an active SiriusXM account configured on the Sonos system.</Label>
+	</Field>
+	<Field type="checkbox" id="SiriusXM" tooltip="SiriusXM Account?">
+		<Label>SiriusXM:</Label>
+	</Field>
+	<Field id="SiriusXMIDNote" type="label" visibleBindingId="SiriusXM" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>This is the id or email address used to register on SiriusXM.</Label>
+	</Field>
+	<Field type="textfield" id="SiriusXMID" tooltip="SiriusXM ID" visibleBindingId="SiriusXM" visibleBindingValue="true">
+        	<Label>SiriusXM ID:</Label>
+	</Field>
+	<Field type="textfield" secure="true" id="SiriusXMPassword" tooltip="SiriusXM Password" visibleBindingId="SiriusXM" visibleBindingValue="true">
+        	<Label>SiriusXM Password:</Label>
+    </Field>
+	<Field id="simpleSeparator5" type="separator"/>
+
+	<Field id="IVONANote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have registered a user account with Amazon IVONA and wish to use it for group announcements. [http://www.ivona.com]</Label>
+	</Field>
+	<Field type="checkbox" id="IVONA" tooltip="IVONA Account?">
+		<Label>IVONA:</Label>
+	</Field>
+	<Field type="textfield" id="IVONAaccessKey" tooltip="IVONA Access Key" visibleBindingId="IVONA" visibleBindingValue="true">
+        	<Label>Access Key:</Label>
+	</Field>
+	<Field type="textfield" id="IVONAsecretKey" tooltip="IVONA Secret Key" visibleBindingId="IVONA" visibleBindingValue="true">
+        	<Label>Secret Key:</Label>
+	</Field>
+	<Field id="simpleSeparator6" type="separator"/>
+
+	<Field id="PollyNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have registered a user account with Amazon Polly and wish to use it for group announcements. [http://aws.amazon.com]</Label>
+	</Field>
+	<Field type="checkbox" id="Polly" tooltip="Polly Account?">
+		<Label>Polly:</Label>
+	</Field>
+	<Field type="textfield" id="PollyaccessKey" tooltip="Polly Access Key" visibleBindingId="Polly" visibleBindingValue="true">
+        	<Label>Access Key:</Label>
+	</Field>
+	<Field type="textfield" id="PollysecretKey" tooltip="Polly Secret Key" visibleBindingId="Polly" visibleBindingValue="true">
+        	<Label>Secret Key:</Label>
+	</Field>
+	<Field id="simpleSeparator7" type="separator"/>
+
+	<Field id="MSTranslateNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you have registered a user account with Microsoft Translate and wish to use it for group announcements. [https://www.microsoft.com/en-us/translator/getstarted.aspx]</Label>
+	</Field>
+	<Field type="checkbox" id="MSTranslate" tooltip="Microsoft Translate Account?">
+		<Label>Microsoft Translate:</Label>
+	</Field>
+	<Field type="textfield" id="MSTranslateClientID" tooltip="MS Translate Client ID" visibleBindingId="MSTranslate" visibleBindingValue="true">
+        	<Label>Client ID:</Label>
+	</Field>
+	<Field type="textfield" id="MSTranslateClientSecret" tooltip="MS Translate Client Secret" visibleBindingId="MSTranslate" visibleBindingValue="true">
+        	<Label>Client Secret:</Label>
+	</Field>
+	<Field id="simpleSeparator8" type="separator"/>
+
+	<Field id="UpdaterEmailsEnabledNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check this box if you want to enable version update notifications. Email sending must also be configured in Indigo's preferences.</Label>
+	</Field>
+	<Field id="updaterEmailsEnabled" type="checkbox" defaultValue="true">
+		<Label>Email Update Notifications:</Label>
+	</Field>
+	<Field id="updaterEmailNote" type="label" visibleBindingId="updaterEmailsEnabled" visibleBindingValue="true" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Enter the email address to be used to receive version updates for the plugin.</Label>
+	</Field>
+	<Field id="updaterEmail" type="textfield" visibleBindingId="updaterEmailsEnabled" visibleBindingValue="true">
+		<Label>Email:</Label>
+	</Field>
+	<Field id="simpleSeparator9" type="separator"/>
+
+	<Field id="showDebugInLogNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+		<Label>Check the boxes below for additional information to log to the Indigo Event Log.  Basic Debugging must be checked for any other deubgging to function.</Label>
+	</Field>
+	<Field type="checkbox" id="showDebugInLog" tooltip="This enables basic debugging messages to display in the Indigo Event Log.">
+		<Label>Basic Debugging:</Label>
+		<Description>(use carefully)</Description>
+	</Field>
+	<Field type="checkbox" id="showStateUpdatesInLog" tooltip="This enables ZonePlayer state updates to display in the Indigo Event Log.">
+		<Label>ZonePlayer State Updates:</Label>
+		<Description>(Basic Debugging must be checked)</Description>
+	</Field>
+	<Field type="checkbox" id="showXMLInLog" tooltip="This enables SOAP messages and responses from actions to display in the Indigo Event Log.">
+		<Label>XML Soap Messages:</Label>
+		<Description>(Basic Debugging must be checked)</Description>
+	</Field>
+	<Field type="checkbox" id="showEventsInLog" tooltip="This enables published events to display in the Indigo Event Log.">
+		<Label>SoCo Events:</Label>
+		<Description>(Basic Debugging must be checked)</Description>
+	</Field>
+</PluginConfig>

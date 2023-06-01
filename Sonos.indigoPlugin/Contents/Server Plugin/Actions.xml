@@ -1,0 +1,799 @@
+<?xml version="1.0"?>
+<Actions>
+	<Action id="actionPlay" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Play</Name>
+		<CallbackMethod>actionPlay</CallbackMethod>
+	</Action>
+	<Action id="actionTogglePlay" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Toggle Play</Name>
+		<CallbackMethod>actionTogglePlay</CallbackMethod>
+	</Action>
+	<Action id="actionPause" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Pause</Name>
+		<CallbackMethod>actionPause</CallbackMethod>
+	</Action>
+	<Action id="actionStop" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Stop</Name>
+		<CallbackMethod>actionStop</CallbackMethod>
+	</Action>
+	<Action id="actionPrevious" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Previous</Name>
+		<CallbackMethod>actionPrevious</CallbackMethod>
+	</Action>
+	<Action id="actionNext" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Next</Name>
+		<CallbackMethod>actionNext</CallbackMethod>
+	</Action>
+	<Action id="sep10"/>
+	<Action id="actionChannelUp" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Channel Up</Name>
+		<CallbackMethod>actionChannelUp</CallbackMethod>
+	</Action>
+	<Action id="actionChannelDown" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Channel Down</Name>
+		<CallbackMethod>actionChannelDown</CallbackMethod>
+	</Action>
+	<Action id="sep1"/>
+	<Action id="actionMuteToggle" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Mute Toggle</Name>
+		<CallbackMethod>actionMuteToggle</CallbackMethod>
+	</Action>
+	<Action id="actionMuteOn" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Mute On</Name>
+		<CallbackMethod>actionMuteOn</CallbackMethod>
+	</Action>
+	<Action id="actionMuteOff" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Mute Off</Name>
+		<CallbackMethod>actionMuteOff</CallbackMethod>
+	</Action>
+	<Action id="sep8" uiPath="Mute"/>
+	<Action id="actionGroupMuteToggle" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Group Mute Toggle</Name>
+		<CallbackMethod>actionGroupMuteToggle</CallbackMethod>
+	</Action>
+	<Action id="actionGroupMuteOn" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Group Mute On</Name>
+		<CallbackMethod>actionGroupMuteOn</CallbackMethod>
+	</Action>
+	<Action id="actionGroupMuteOff" deviceFilter="self.ZonePlayer" uiPath="Mute">
+		<Name>Sonos: Group Mute Off</Name>
+		<CallbackMethod>actionGroupMuteOff</CallbackMethod>
+	</Action>	
+	<Action id="actionVolume" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Volume</Name>
+		<CallbackMethod>actionVolume</CallbackMethod>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Level (0-100):</Label>
+			</Field>
+		</ConfigUI>
+	</Action>
+	<Action id="actionVolumeDown" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Volume Down</Name>
+		<CallbackMethod>actionVolumeDown</CallbackMethod>
+	</Action>
+	<Action id="actionVolumeUp" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Volume Up</Name>
+		<CallbackMethod>actionVolumeUp</CallbackMethod>
+	</Action>
+	<Action id="sep9" uiPath="Volume"/>
+	<Action id="actionGroupVolume" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Group Volume</Name>
+		<CallbackMethod>actionGroupVolume</CallbackMethod>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Level (0-100):</Label>
+			</Field>
+		</ConfigUI>
+	</Action>
+	<Action id="actionRelativeGroupVolume" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Relative Group Volume</Name>
+		<CallbackMethod>actionRelativeGroupVolume</CallbackMethod>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Level (-100 to 100):</Label>
+			</Field>
+		</ConfigUI>
+	</Action>	
+	<Action id="actionGroupVolumeDown" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Group Volume Down</Name>
+		<CallbackMethod>actionGroupVolumeDown</CallbackMethod>
+	</Action>
+	<Action id="actionGroupVolumeUp" deviceFilter="self.ZonePlayer" uiPath="Volume">
+		<Name>Sonos: Group Volume Up</Name>
+		<CallbackMethod>actionGroupVolumeUp</CallbackMethod>
+	</Action>
+	<Action id="actionBass" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Bass</Name>
+		<CallbackMethod>actionBass</CallbackMethod>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Level (-10 to +10):</Label>
+			</Field>
+		</ConfigUI>
+	</Action>
+	<Action id="actionBassDown" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Bass Down</Name>
+		<CallbackMethod>actionBassDown</CallbackMethod>
+	</Action>
+	<Action id="actionBassUp" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Bass Up</Name>
+		<CallbackMethod>actionBassUp</CallbackMethod>
+	</Action>
+	<Action id="sep13" uiPath="Equalizer"/>
+	<Action id="actionTreble" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Treble</Name>
+		<CallbackMethod>actionTreble</CallbackMethod>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Level (-10 to +10):</Label>
+			</Field>
+		</ConfigUI>
+	</Action>
+	<Action id="actionTrebleDown" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Treble Down</Name>
+		<CallbackMethod>actionTrebleDown</CallbackMethod>
+	</Action>
+	<Action id="actionTrebleUp" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Treble Up</Name>
+		<CallbackMethod>actionTrebleUp</CallbackMethod>
+	</Action>
+
+	<Action id="sep13B" uiPath="Equalizer"/>
+	<Action id="actionNightMode" deviceFilter="self.ZonePlayer" uiPath="Equalizer">
+		<Name>Sonos: Night Mode</Name>
+		<ConfigUI>
+			<Field id="setting" type="checkbox">
+				<Label>Night Mode:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionNightMode</CallbackMethod>
+	</Action>
+
+	<Action id="actionQ_Crossfade" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Crossfade</Name>
+		<ConfigUI>
+			<Field id="setting" type="checkbox">
+				<Label>Queue Crossfade:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionQ_Crossfade</CallbackMethod>
+	</Action>
+	<Action id="actionQ_Repeat" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Repeat</Name>
+		<ConfigUI>
+			<Field id="setting" type="checkbox">
+				<Label>Queue Repeat:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionQ_Repeat</CallbackMethod>
+	</Action>
+	<Action id="actionQ_RepeatOne" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Repeat Song</Name>
+		<ConfigUI>
+			<Field id="setting" type="checkbox">
+				<Label>Queue Repeat Song:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionQ_RepeatOne</CallbackMethod>
+	</Action>
+	<Action id="actionQ_RepeatToggle" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Repeat Toggle</Name>
+		<CallbackMethod>actionQ_RepeatToggle</CallbackMethod>
+	</Action>	
+	<Action id="actionQ_Shuffle" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Shuffle</Name>
+		<ConfigUI>
+			<Field id="setting" type="checkbox">
+				<Label>Queue Shuffle:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionQ_Shuffle</CallbackMethod>
+	</Action>
+	<Action id="actionQ_ShuffleToggle" deviceFilter="self.ZonePlayer" uiPath="Queue Toggles">
+		<Name>Sonos: Queue Shuffle Toggle</Name>
+		<CallbackMethod>actionQ_ShuffleToggle</CallbackMethod>
+	</Action>
+	<Action id="sep2"/>
+	<Action id="actionQ_Clear" deviceFilter="self.ZonePlayer" uiPath="Queue Actions">
+		<Name>Sonos: Clear Queue</Name>
+		<CallbackMethod>actionQ_Clear</CallbackMethod>
+	</Action>
+	<Action id="actionQ_Save" deviceFilter="self.ZonePlayer" uiPath="Queue Actions">
+		<Name>Sonos: Save Queue to Playlist</Name>
+		<ConfigUI>
+			<Field id="setting" type="textfield">
+				<Label>Playlist Name:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionQ_Save</CallbackMethod>
+	</Action>
+	<Action id="actionCD_RemovePlaylist" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Remove Playlist</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Playlist:</Label>
+				<List class="self" method="getZP_LIST_PlaylistObjects" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionCD_RemovePlaylist</CallbackMethod>
+	</Action>
+	<Action id="sep3"/>
+	<Action id="actionZP_addPlayerToZone" deviceFilter="self.ZonePlayer" uiPath="Grouping">
+		<Name>Sonos: Add Player to Zone</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Zone:</Label>
+				<List class="self" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_addPlayerToZone</CallbackMethod>
+	</Action>
+	<Action id="actionZP_addPlayersToZone" deviceFilter="self.ZonePlayer" uiPath="Grouping">
+		<Name>Sonos: Add Player(s) to Zone</Name>
+		<ConfigUI>
+			<Field id="zp1" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp2" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp3" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp4" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp5" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp6" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp7" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp8" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp9" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp10" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp11" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp12" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_addPlayersToZone</CallbackMethod>
+	</Action>
+	<Action id="sep11" uiPath="Grouping"/>
+	<Action id="actionZP_setStandalone" deviceFilter="self.ZonePlayer" uiPath="Grouping">
+		<Name>Sonos: Set Player to Standalone</Name>
+		<CallbackMethod>actionZP_setStandalone</CallbackMethod>
+	</Action>
+	<Action id="actionZP_setStandalones" uiPath="Grouping">
+		<Name>Sonos: Set Player(s) to Standalone</Name>
+		<ConfigUI>
+			<Field id="zp1" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp2" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp3" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp4" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp5" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp6" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp7" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp8" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp9" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp10" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp11" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp12" type="menu" defaultValue="00000">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_setStandalones</CallbackMethod>
+	</Action>
+		<Action id="actionZP_saveStates" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Save States</Name>
+		<CallbackMethod>actionZP_saveStates</CallbackMethod>
+	</Action>
+	<Action id="sep5"/>
+	<Action id="actionZP_sleepTimer" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Sleep Timer</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sleep Timer Duration</Label>
+				<List>
+					<Option value="00:00:00">Off</Option>
+					<Option value="00:05:00">5 minutes</Option>
+					<Option value="00:15:00">15 minutes</Option>
+					<Option value="00:30:00">30 minutes</Option>
+					<Option value="00:45:00">45 minutes</Option>
+					<Option value="01:00:00">1 hour</Option>
+					<Option value="02:00:00">2 hour</Option>
+					<Option value="03:00:00">3 hour</Option>
+					<Option value="04:00:00">4 hour</Option>
+					<Option value="05:00:00">5 hour</Option>
+					<Option value="06:00:00">6 hour</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_sleepTimer</CallbackMethod>
+	</Action>
+	<Action id="sep6"/>
+	<Action id="actionZP_announcement">
+		<Name>Sonos: Group Announcement Line-In</Name>
+		<ConfigUI>
+			<Field id="gc_only" type="checkbox" defaultValue="false" hidden="true">
+				<Label>Group Coordinator Only:</Label>
+			</Field>
+			<Field id="zp1" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp2" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp3" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp4" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp5" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp6" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp7" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp8" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp9" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp10" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp11" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp12" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp_input" type="menu">
+				<Label>Sonos Line-In:</Label>
+				<List class="self" method="getZP_LineIn" dynamicReload="yes"/>
+			</Field>
+			<Field id="setting" type="textfield">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="zp_volume" type="textfield">
+				<Label>Level (0-100):</Label>
+			</Field>
+			<Field id="chime" type="checkbox" defaultValue="false">
+				<Label>Chime Before Message:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_announcement</CallbackMethod>
+	</Action>
+	<Action id="actionZP_announcementMP3">
+		<Name>Sonos: Group Announcement MP3</Name>
+		<ConfigUI>
+			<Field id="gc_only" type="checkbox" defaultValue="false">
+				<Label>Group Coordinator Only:</Label>
+			</Field>
+			<Field id="zp1" type="menu">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp2" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp3" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp4" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp5" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp6" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp7" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp8" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp9" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp10" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp11" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp12" type="menu" visibleBindingId="gc_only" visibleBindingValue="false">
+				<Label>ZonePlayer:</Label>
+				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
+			</Field>
+			<Field id="ttsORfile" type="menu" defaultValue="TTS">
+				<Label>Source:</Label>
+				<List>
+					<Option value="FILE">File</Option>
+					<Option value="POLLY">Amazon Polly</Option>
+					<Option value="APPLE">Apple Speech</Option>					
+					<Option value="TTS">Google Text To Speech</Option>
+					<Option value="IVONA">IVONA Text To Speech</Option>
+					<Option value="MICROSOFT">Microsoft Translate</Option>
+				</List>
+			</Field>
+			<Field id="setting" type="textfield" visibleBindingId="ttsORfile" visibleBindingValue="TTS">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="language" type="menu" defaultValue="en" visibleBindingId="ttsORfile" visibleBindingValue="TTS">
+				<Label>Language:</Label>
+				<List>
+					<Option value="af">Afrikaans</Option>
+					<Option value="sq">Albanian</Option>
+					<Option value="ar">Arabic</Option>
+					<Option value="hy">Armenian</Option>
+					<Option value="az">Azerbaijani</Option>
+					<Option value="eu">Basque</Option>
+					<Option value="be">Belarusian</Option>
+					<Option value="bn">Bengali</Option>
+					<Option value="bh">Bihari</Option>
+					<Option value="bs">Bosnian</Option>
+					<Option value="br">Breton</Option>
+					<Option value="bg">Bulgarian</Option>
+					<Option value="km">Cambodian</Option>
+					<Option value="ca">Catalan</Option>
+					<Option value="zh-CN">Chinese (Simplified)</Option>
+					<Option value="zh-TW">Chinese (Traditional)</Option>
+					<Option value="co">Corsican</Option>
+					<Option value="hr">Croatian</Option>
+					<Option value="cs">Czech</Option>
+					<Option value="da">Danish</Option>
+					<Option value="nl">Dutch</Option>
+					<Option value="en">English</Option>
+					<Option value="eo">Esperanto</Option>
+					<Option value="et">Estonian</Option>
+					<Option value="fo">Faroese</Option>
+					<Option value="tl">Filipino</Option>
+					<Option value="fi">Finnish</Option>
+					<Option value="fr">French</Option>
+					<Option value="fy">Frisian</Option>
+					<Option value="gl">Galician</Option>
+					<Option value="ka">Georgian</Option>
+					<Option value="de">German</Option>
+					<Option value="el">Greek</Option>
+					<Option value="gn">Guarani</Option>
+					<Option value="gu">Gujarati</Option>
+					<Option value="ha">Hausa</Option>
+					<Option value="iw">Hebrew</Option>
+					<Option value="hi">Hindi</Option>
+					<Option value="hu">Hungarian</Option>
+					<Option value="is">Icelandic</Option>
+					<Option value="id">Indonesian</Option>
+					<Option value="ia">Interlingua</Option>
+					<Option value="ga">Irish</Option>
+					<Option value="it">Italian</Option>
+					<Option value="ja">Japanese</Option>
+					<Option value="ja">Javanese</Option>
+					<Option value="kn">Kannada</Option>
+					<Option value="kk">Kazakh</Option>
+					<Option value="rw">Kinyarwanda</Option>
+					<Option value="rn">Kirundi</Option>
+					<Option value="ko">Korean</Option>
+					<Option value="ku">Kurdish</Option>
+					<Option value="ky">Kyrgyz</Option>
+					<Option value="lo">Laothian</Option>
+					<Option value="la">Latin</Option>
+					<Option value="lv">Latvian</Option>
+					<Option value="ln">Lingala</Option>
+					<Option value="lt">Lithuanian</Option>
+					<Option value="mk">Macedonian</Option>
+					<Option value="mg">Malagasy</Option>
+					<Option value="ms">Malay</Option>
+					<Option value="ml">Malayalam</Option>
+					<Option value="mt">Maltese</Option>
+					<Option value="mi">Maori</Option>
+					<Option value="mr">Marathi</Option>
+					<Option value="mo">Moldavian</Option>
+					<Option value="mn">Mongolian</Option>
+					<Option value="sr-ME">Montenegrin</Option>
+					<Option value="ne">Nepali</Option>
+					<Option value="no">Norwegian</Option>
+					<Option value="nn">Norwegian (Nynorsk)</Option>
+					<Option value="oc">Occitan</Option>
+					<Option value="or">Oriya</Option>
+					<Option value="om">Oromo</Option>
+					<Option value="ps">Pashto</Option>
+					<Option value="fa">Persian</Option>
+					<Option value="pl">Polish</Option>
+					<Option value="pt-BR">Portuguese (Brazil)</Option>
+					<Option value="pt-PT">Portuguese (Portugal)</Option>
+					<Option value="pa">Punjabi</Option>
+					<Option value="qu">Quechua</Option>
+					<Option value="ro">Romanian</Option>
+					<Option value="rm">Romansh</Option>
+					<Option value="ru">Russian</Option>
+					<Option value="gd">Scots Gaelic</Option>
+					<Option value="sr">Serbian</Option>
+					<Option value="sh">Serbo-Croatian</Option>
+					<Option value="st">Sesotho</Option>
+					<Option value="sn">Shona</Option>
+					<Option value="sd">Sindhi</Option>
+					<Option value="si">Sinhalese</Option>
+					<Option value="sk">Slovak</Option>
+					<Option value="sl">Slovenian</Option>
+					<Option value="so">Somali</Option>
+					<Option value="es">Spanish</Option>
+					<Option value="su">Sudanese</Option>
+					<Option value="sw">Swahili</Option>
+					<Option value="sv">Swedish</Option>
+					<Option value="tg">Tajik</Option>
+					<Option value="ta">Tamil</Option>
+					<Option value="tt">Tatar</Option>
+					<Option value="te">Telugu</Option>
+					<Option value="th">Thai</Option>
+					<Option value="ti">Tigrinya</Option>
+					<Option value="to">Tonga</Option>
+					<Option value="tr">Turkish</Option>
+					<Option value="tk">Turkmen</Option>
+					<Option value="tw">Twi</Option>
+					<Option value="ug">Uighur</Option>
+					<Option value="uk">Ukranian</Option>
+					<Option value="ur">Urdu</Option>
+					<Option value="uz">Uzbek</Option>
+					<Option value="vi">Vietnamese</Option>
+					<Option value="cy">Welsh</Option>
+					<Option value="xh">Xhosa</Option>
+					<Option value="yi">Yiddish</Option>
+					<Option value="yo">Yoruba</Option>
+					<Option value="zu">Zulu</Option>
+				</List>
+			</Field>
+
+			<Field id="IVONA_setting" type="textfield" visibleBindingId="ttsORfile" visibleBindingValue="IVONA">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="IVONA_voice" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="IVONA">
+				<Label>Voice:</Label>
+				<List class="self" method="getIVONAVoices" dynamicReload="yes"/>
+			</Field>
+			<Field id="IVONA_sentence_break" type="textfield" defaultValue="400" visibleBindingId="ttsORfile" visibleBindingValue="IVONA">
+				<Label>Sentence Break (ms): </Label>
+			</Field>
+			<Field id="IVONA_speech_rate" type="menu" defaultValue="medium" visibleBindingId="ttsORfile" visibleBindingValue="IVONA">
+				<Label>Speech Rate:</Label>
+				<List>
+					<Option value="x-slow">Extra Slow</Option>
+					<Option value="slow">Slow</Option>
+					<Option value="medium">Medium</Option>
+					<Option value="fast">Fast</Option>
+					<Option value="x-fast">Extra Fast</Option>
+				</List>
+			</Field>
+
+			<Field id="POLLY_setting" type="textfield" visibleBindingId="ttsORfile" visibleBindingValue="POLLY">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="POLLY_voice" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="POLLY">
+				<Label>Voice:</Label>
+				<List class="self" method="getPollyVoices" dynamicReload="yes"/>
+			</Field>
+
+			<Field id="APPLE_setting" type="textfield" visibleBindingId="ttsORfile" visibleBindingValue="APPLE">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="APPLE_voice" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="APPLE">
+				<Label>Voice:</Label>
+				<List class="self" method="getAppleVoices" dynamicReload="yes"/>
+			</Field>
+
+			<Field id="MICROSOFT_setting" type="textfield" visibleBindingId="ttsORfile" visibleBindingValue="MICROSOFT">
+				<Label>Message:</Label>
+			</Field>
+			<Field id="MICROSOFT_voice" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="MICROSOFT">
+				<Label>Voice:</Label>
+				<List class="self" method="getMicrosoftLanguages" dynamicReload="yes"/>
+			</Field>
+
+			<Field id="sound_file" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="FILE">
+				<Label>Sound File:</Label>
+				<List class="self" method="getZP_SoundFiles" dynamicReload="yes"/>
+			</Field>
+			<Field id="zp_volume" type="textfield">
+				<Label>Level (0-100):</Label>
+			</Field>
+			<Field id="chime" type="checkbox" defaultValue="false">
+				<Label>Chime Before Message:</Label>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_announcementMP3</CallbackMethod>
+	</Action>
+	<Action id="sep7"/>
+	<Action id="actionZP_LineIn" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: Line-In</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Line-In:</Label>
+				<List class="self" method="getZP_LineIn" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_LineIn</CallbackMethod>
+	</Action>
+	<Action id="actionZP_Pandora" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: Pandora Station</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Pandora Station:</Label>
+				<List class="self" method="getZP_Pandora" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_Pandora</CallbackMethod>
+	</Action>
+	<Action id="actionZP_Queue" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: Queue</Name>
+		<CallbackMethod>actionZP_Queue</CallbackMethod>
+	</Action>
+	<Action id="actionZP_RT_FavStation" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: RadioTime Favorite Station</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Radiotime Favorite:</Label>
+				<List class="self" method="getZP_RT_FavStations" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_RT_FavStation</CallbackMethod>
+	</Action>
+	<Action id="actionZP_SiriusXM" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: SiriusXM Channel</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos SiriusXM Channel:</Label>
+				<List class="self" method="getZP_SiriusXM" dynamicReload="yes"/>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_SiriusXM</CallbackMethod>
+	</Action>
+	<Action id="actionZP_SonosFavorites" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: Sonos Favorites</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Favorite:</Label>
+				<List class="self" method="getZP_SonosFavorites" dynamicReload="yes"/>
+			</Field>
+			<Field id="modeNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
+				<Label>Play Mode will only apply to Favorites that utilize the Queue.</Label>
+			</Field>
+			<Field id="mode" type="menu" defaultValue="Play Now">
+				<Label>Play Mode:</Label>
+				<List>
+					<Option value="Play Now">Play Now</Option>
+					<Option value="Play Next">Play Next</Option>
+					<Option value="Add To Queue">Add To Queue</Option>
+					<Option value="Replace Queue">Replace Queue</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_SonosFavorites</CallbackMethod>
+	</Action>
+	<Action id="actionZP_LIST" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: Sonos Playlist</Name>
+		<ConfigUI>
+			<Field id="setting" type="menu">
+				<Label>Sonos Playlist:</Label>
+				<List class="self" method="getZP_LIST" dynamicReload="yes"/>
+			</Field>
+			<Field id="mode" type="menu" defaultValue="Play Now">
+				<Label>Play Mode:</Label>
+				<List>
+					<Option value="Play Now">Play Now</Option>
+					<Option value="Play Next">Play Next</Option>
+					<Option value="Add To Queue">Add To Queue</Option>
+					<Option value="Replace Queue">Replace Queue</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+		<CallbackMethod>actionZP_LIST</CallbackMethod>
+	</Action>
+	<Action id="actionZP_TV" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+		<Name>Sonos: TV</Name>
+		<CallbackMethod>actionZP_TV</CallbackMethod>
+	</Action>
+	<Action id="sep12"/>
+	<Action id="actionPandora_ThumbsUp" deviceFilter="self.ZonePlayer" uiPath="Pandora">
+		<Name>Sonos: Pandora Thumbs Up</Name>
+		<CallbackMethod>actionPandora_ThumbsUp</CallbackMethod>
+	</Action>
+	<Action id="actionPandora_ThumbsDown" deviceFilter="self.ZonePlayer" uiPath="Pandora">
+		<Name>Sonos: Pandora Thumbs Down</Name>
+		<CallbackMethod>actionPandora_ThumbsDown</CallbackMethod>
+	</Action>
+
+	<Action id="sep14"/>
+	<Action id="actionZP_DumpURI" deviceFilter="self.ZonePlayer" uiPath="Utilities">
+		<Name>Sonos: Dump URI</Name>
+		<CallbackMethod>actionZP_DumpURI</CallbackMethod>
+	</Action>
+</Actions>
+

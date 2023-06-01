@@ -1,0 +1,286 @@
+<?xml version="1.0"?>
+<Devices>
+<!--	<Device type="custom" id="ZoneController">-->
+<!--		<Name>Sonos Zone Controller</Name>-->
+<!--	</Device>-->
+	<Device type="custom" id="ZonePlayer">
+		<Name>Sonos Zone Player</Name>
+		<ConfigUI>
+			<Field id="address" type="textfield">
+				<Label>IP Address:</Label>
+			</Field>
+			<Field id="model" type="menu" defaultValue="0">
+				<Label>Model:</Label>
+				<List>
+					<Option value="0">ZonePlayer</Option>
+					<Option value="9">BEAM</Option>
+					<Option value="1">CONNECT</Option>
+					<Option value="2">CONNECT:AMP</Option>
+					<Option value="10">ERA:100</Option>
+					<Option value="11">ERA:300</Option>
+					<Option value="3">PLAY:1</Option>
+					<Option value="4">PLAY:3</Option>
+					<Option value="5">PLAY:5</Option>
+					<Option value="6">PLAYBAR</Option>
+					<Option value="8">PLAYBASE</Option>
+					<Option value="7">SUB</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+		<UiDisplayStateId>ZP_STATE</UiDisplayStateId>
+		<States>
+			<State id="ModelName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>ModelName</TriggerLabel>
+				<ControlPageLabel>ModelName</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>			
+			<State id="SerialNumber">
+				<ValueType>String</ValueType>
+				<TriggerLabel>SerialNumber</TriggerLabel>
+				<ControlPageLabel>SerialNumber</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>			
+			<State id="ZP_INFO">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Info</TriggerLabel>
+				<ControlPageLabel>Info</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_STATION">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Station</TriggerLabel>
+				<ControlPageLabel>Station</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_VOLUME">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Volume</TriggerLabel>
+				<ControlPageLabel>Volume</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_VOLUME_FIXED">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Volume Fixed</TriggerLabel>
+				<ControlPageLabel>Volume Fixed</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_MUTE">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Mute</TriggerLabel>
+				<ControlPageLabel>Mute</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_BASS">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Bass</TriggerLabel>
+				<ControlPageLabel>Bass</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_TREBLE">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Treble</TriggerLabel>
+				<ControlPageLabel>Treble</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_STATE">
+				<ValueType>String</ValueType>
+				<TriggerLabel>State</TriggerLabel>
+				<ControlPageLabel>State</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_ART">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Art</TriggerLabel>
+				<ControlPageLabel>Art</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_TRACK">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Track</TriggerLabel>
+				<ControlPageLabel>Track</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_DURATION">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Duration</TriggerLabel>
+				<ControlPageLabel>Duration</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_RELATIVE">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Elapsed</TriggerLabel>
+				<ControlPageLabel>Elapsed</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_ALBUM">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Album</TriggerLabel>
+				<ControlPageLabel>Album</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_ARTIST">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Artist</TriggerLabel>
+				<ControlPageLabel>Artist</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_CREATOR">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Creator</TriggerLabel>
+				<ControlPageLabel>Creator</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_AIName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Line-In Name</TriggerLabel>
+				<ControlPageLabel>Line-In Name</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_AIPath">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Line-In Path</TriggerLabel>
+				<ControlPageLabel>Line-In Path</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_CurrentURI">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Current URI</TriggerLabel>
+				<ControlPageLabel>Current URI</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_ZoneName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>ZoneName</TriggerLabel>
+				<ControlPageLabel>ZoneName</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_LocalUID">
+				<ValueType>String</ValueType>
+				<TriggerLabel>LocalUID</TriggerLabel>
+				<ControlPageLabel>Local UID</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_NALBUM">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Next Album</TriggerLabel>
+				<ControlPageLabel>Next Album</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_NARTIST">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Next Artist</TriggerLabel>
+				<ControlPageLabel>Next Artist</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_NCREATOR">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Next Creator</TriggerLabel>
+				<ControlPageLabel>Next Creator</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_NART">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Next Album Art</TriggerLabel>
+				<ControlPageLabel>Next Album Art</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_NTRACK">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Next Track</TriggerLabel>
+				<ControlPageLabel>Next Track</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_Crossfade">
+				<ValueType boolType="OnOff">Boolean</ValueType>
+				<TriggerLabel>Crossfade</TriggerLabel>
+				<ControlPageLabel>Crossfade</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_Repeat">
+				<ValueType boolType="OnOff">Boolean</ValueType>
+				<TriggerLabel>Repeat</TriggerLabel>
+				<ControlPageLabel>Repeat</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_RepeatOne">
+				<ValueType boolType="OnOff">Boolean</ValueType>
+				<TriggerLabel>RepeatOne</TriggerLabel>
+				<ControlPageLabel>RepeatOne</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_Shuffle">
+				<ValueType boolType="OnOff">Boolean</ValueType>
+				<TriggerLabel>Shuffle</TriggerLabel>
+				<ControlPageLabel>Shuffle</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_Number">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Items in Queue</TriggerLabel>
+				<ControlPageLabel>Items in Queue</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="Q_ObjectID">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Queue ObjectID</TriggerLabel>
+				<ControlPageLabel>Queue ObjectID</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>			
+			<State id="GROUP_Coordinator">
+				<ValueType boolType="TrueFalse">Boolean</ValueType>
+				<TriggerLabel>Group Coordinator</TriggerLabel>
+				<ControlPageLabel>Group Coordinator</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="GROUP_Name">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Group Name</TriggerLabel>
+				<ControlPageLabel>Group Name</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_CurrentTrack">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Current Track Number</TriggerLabel>
+				<ControlPageLabel>Current Track Number</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZP_CurrentTrackURI">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Current Track URI</TriggerLabel>
+				<ControlPageLabel>Current Track URI</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZoneGroupID">
+				<ValueType>String</ValueType>
+				<TriggerLabel>ZoneGroupID</TriggerLabel>
+				<ControlPageLabel>ZoneGroupID</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZoneGroupName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>ZoneGroupName</TriggerLabel>
+				<ControlPageLabel>ZoneGroupName</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="ZonePlayerUUIDsInGroup">
+				<ValueType>String</ValueType>
+				<TriggerLabel>ZonePlayerUUIDsInGroup</TriggerLabel>
+				<ControlPageLabel>ZonePlayerUUIDsInGroup</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="bootseq" hidden="false">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>bootseq</TriggerLabel>
+				<ControlPageLabel>bootseq</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+			<State id="alive" hidden="false">
+				<ValueType>String</ValueType>
+				<TriggerLabel>alive</TriggerLabel>
+				<ControlPageLabel>alive</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+		</States>
+	</Device>
+</Devices>

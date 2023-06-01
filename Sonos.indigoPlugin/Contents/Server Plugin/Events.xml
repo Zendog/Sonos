@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<Events>
+	<Event id="zonePlayerDead">
+		<SupportURL>https://vulture.lagaros.com/</SupportURL>
+		<Name>ZonePlayer Unavailable</Name>
+	</Event>
+	<Event id="zonePlayerAlive">
+		<SupportURL>https://vulture.lagaros.com/</SupportURL>
+		<Name>ZonePlayer Available</Name>
+	</Event>
+</Events>
