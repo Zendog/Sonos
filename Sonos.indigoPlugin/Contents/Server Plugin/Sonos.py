@@ -2514,8 +2514,9 @@ class Sonos(object):
                     response = client.synthesize_speech(OutputFormat='mp3', Text=announcement, VoiceId=pluginAction.props.get("POLLY_voice"))
                     if "AudioStream" in response:
                         with closing(response["AudioStream"]) as stream:
-                            data = stream.read()
+                            data_bytes = stream.read()
                             f = open("announcement.mp3", "w+")
+                            data = data_bytes.decode("utf-8")
                             f.write(data)
                             f.close()
                     s_announcement = "announcement.mp3"
