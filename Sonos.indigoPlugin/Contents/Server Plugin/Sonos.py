@@ -1919,7 +1919,15 @@ class Sonos(object):
                     else:
                         self.plugin.sleep(0.5)
                         PlaylistName = pluginAction.props.get("setting")
+
                         ZP  = self.parseBrowseNumberReturned(self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
+
+                        try:
+                            int(ZP)
+                        except ValueError:
+                            self.logger.error(f"Q_Save - ZP type is '{type(ZP)}', value is '{ZP}'")
+                            return
+
                         if PlaylistName == "Indigo_" + dev.states['ZP_LocalUID']:
                             self.updateStateOnServer(dev, "Q_Number", ZP)
                         if int(ZP) > 0:
@@ -3348,7 +3356,12 @@ class Sonos(object):
     def copyStateFromMaster(self, dev):
         try:
             self.logger.debug("Copy states from master ZonePlayer...")
-            (MasterUID,x) = dev.states['GROUP_Name'].split(":")
+            try:
+                MasterUID, x = dev.states['GROUP_Name'].split(":")
+            except:
+                self.logger.error(f"copyStateFromMaster - Unable to split Group Name: {dev.states['GROUP_Name']}")
+                return
+
             for mdev in indigo.devices.iter("self.ZonePlayer"):
                 if mdev.states['ZP_LocalUID'] == MasterUID:
                     for state in list(ZoneGroupStates):
