@@ -23,16 +23,15 @@ try:
     from twisted.internet import reactor
     from twisted.internet.protocol import DatagramProtocol
     from twisted.application.internet import MulticastServer
+    import xmltodict
 except ImportError:
     imports_successful = False
-
 
 # ============================== Plugin Imports ===============================
 from constants import *
 
 if imports_successful:
     from Sonos import Sonos
-
 
 
 class Plugin(indigo.PluginBase):
@@ -60,7 +59,7 @@ class Plugin(indigo.PluginBase):
         self.plugin_file_handler.setLevel(LOG_LEVEL_INFO)  # Logging Level for plugin log file
         self.indigo_log_handler.setLevel(LOG_LEVEL_INFO)   # Logging level for Indigo Event Log
 
-        self.logger = logging.getLogger("Plugin.Zigbee2mqtt")
+        self.logger = logging.getLogger("Plugin.Sonos")
 
         # Original Sonos plugin
 
@@ -165,7 +164,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, dev):
         try:
-            if self.do_not_start_stop_devices:  # This is set on if Package requirements listed in requirements.txt are not met
+            if self.do_not_start_stop_devices:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
             self.Sonos.deviceStartComm (dev)
@@ -175,7 +174,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStopComm(self, dev):
         try:
-            if self.do_not_start_stop_devices:  # This is set on if Package requirements listed in requirements.txt are not met
+            if self.do_not_start_stop_devices:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
             self.Sonos.deviceStopComm (dev)

@@ -895,6 +895,10 @@ class Sonos(object):
 
             # SM_TEMPLATE = f"""<?xml version="1.0" encoding="utf-8"?><s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><ns0:{soapAction} xmlns:ns0=\"urn:{urn}:service:{soapBranch[1:]}:1\"><InstanceID>0</InstanceID>{soapPayload}</ns0:{soapAction}></s:Body></s:Envelope>"""
 
+            # Convert soapPayload to a string if currently bytes
+            if isinstance(soapPayload, bytes):
+                soapPayload = soapPayload.decode("utf-8")
+
             SM_TEMPLATE = (
                     '<?xml version="1.0" encoding="utf-8"?>'
                     '<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">'
@@ -933,7 +937,7 @@ class Sonos(object):
                 except:
                     self.logger.error(f"UPNP Error: {status}")
                 self.logger.error (f"Offending Command -> zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
-                self.logger.debug(f"Error Response: {res}")
+                self.logger.error(f"Error Response: {res}")  # TODO: Revert to Debug
 
             # reconstruct multi-line strings
             # discovered in Sonos beta firmware
@@ -1301,8 +1305,8 @@ class Sonos(object):
                 self.logger.debug(f"[{time.asctime()}] [{dev.name}] [SoCo AudioIn] {soco_event.variables}")
 
             val = soco_event.variables["audio_input_name"]
-            self.updateStateOnServer(dev, "ZP_AIName", val.decode('utf-8'))
-            self.getLineIn(dev, val.decode('utf-8'))
+            self.updateStateOnServer(dev, "ZP_AIName", val)
+            self.getLineIn(dev, val)
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1312,7 +1316,7 @@ class Sonos(object):
             self.logger.debug(f"Processing Cover Art: {dev.name}:{val}")
             ZP_ZoneName = dev.states["ZP_ZoneName"]
             res = dev.states["ZP_CurrentURI"]
-            if val != None:
+            if val is not None:
                 # Retrieve parent URI for slave zone
                 if uri_group in res:
                     (ParentUID,x) = dev.states["ZoneGroupID"].split(':')
@@ -2209,7 +2213,7 @@ class Sonos(object):
                                 title = Channel[2]
                                 break
                         #self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:r%3a" + contentId + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + str(siriusChannelNo) + " - " + name +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:" + urllib.quote(contentId) + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + title +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:" + urllib.parse.quote(contentId) + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + title +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
                         self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                         self.logger.info (f"ZonePlayer: {dev.name}, Play SiriusXM: {title}")
                     else:
@@ -2515,9 +2519,8 @@ class Sonos(object):
                     if "AudioStream" in response:
                         with closing(response["AudioStream"]) as stream:
                             data_bytes = stream.read()
-                            f = open("announcement.mp3", "w+")
-                            data = data_bytes.decode("utf-8")
-                            f.write(data)
+                            f = open("announcement.mp3", "wb+")
+                            f.write(data_bytes)
                             f.close()
                     s_announcement = "announcement.mp3"
                     tts_delay = 0.5
@@ -2720,7 +2723,8 @@ class Sonos(object):
                         # resture uri
                         if updatedURI[dev.id] == 0:
                             self.logger.debug(f"{state[0]}: Restore URI: {state[7]}")
-                            SendVar = "<CurrentURI>"+state[7].replace("&", "&amp;")+"</CurrentURI><CurrentURIMetaData>" + state[8].decode('utf-8') + "</CurrentURIMetaData>"
+                            # SendVar = "<CurrentURI>"+state[7].replace("&", "&amp;")+"</CurrentURI><CurrentURIMetaData>" + state[8].decode('utf-8') + "</CurrentURIMetaData>"
+                            SendVar = "<CurrentURI>" + state[7].replace("&", "&amp;") + "</CurrentURI><CurrentURIMetaData>" + state[8] + "</CurrentURIMetaData>"
                             self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
                             updatedURI[dev.id] = 1
 
