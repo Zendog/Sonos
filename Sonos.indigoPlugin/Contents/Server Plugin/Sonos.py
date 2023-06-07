@@ -604,7 +604,6 @@ class Sonos(object):
                 dev.setErrorStateOnServer("error")
                 return
 
-            # self.updateStateOnServer (dev, "ZP_ZoneName", ZPInfo.findtext('ZoneName').decode('utf-8'))
             # Allow for special characters in ZoneName
             self.updateStateOnServer (dev, "ZP_ZoneName", ZoneName)
             self.updateStateOnServer (dev, "ZP_LocalUID", LocalUID)
@@ -814,7 +813,6 @@ class Sonos(object):
         try:
             zoneIP = dev.pluginProps["address"]
             res = self.SOAPSend (zoneIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupAttributes", "")
-            # res = bytes_res.decode('utf-8')
             self.updateStateOnServer (dev, "ZoneGroupName", self.parseCurrentZoneGroupName(res))
             self.updateStateOnServer (dev, "ZoneGroupID", self.parseCurrentZoneGroupID(res))
             self.updateStateOnServer (dev, "ZonePlayerUUIDsInGroup", self.parseCurrentZonePlayerUUIDsInGroup(res))
@@ -1079,7 +1077,6 @@ class Sonos(object):
                 if val == "":
                     val = None
                 try:
-                    # if uri_radio not in val.title.decode('utf-8'):
                     if uri_radio not in dev.states["ZP_CurrentURI"]:
                         # self.logger.info(f"ZP_TRACK val [Type = {type(val)}, Length = {len(val)}]: '{val}'")
                         title = val.title
@@ -1102,14 +1099,14 @@ class Sonos(object):
                 except:
                     self.updateStateOnServer(dev, "ZP_ARTIST", "")
                 try:
-                    self.processArt(dev, val.album_art_uri.decode('utf-8'))
+                    self.processArt(dev, val.album_art_uri)
                     if dev.states['GROUP_Coordinator'] == "true":
                         ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup'].split(',')
                         for rdev in indigo.devices.iter("self.ZonePlayer"):
                             SlaveUID = rdev.states['ZP_LocalUID']
                             if SlaveUID != dev.states['ZP_LocalUID'] and SlaveUID in ZonePlayerUUIDsInGroup:
                                 self.processArt(rdev, val.album_art_uri)
-                except:
+                except Exception as exception_error:
                     self.processArt(dev, None)
                     # self.updateStateOnServer (dev, "ZP_ART", "")
 
@@ -1249,10 +1246,11 @@ class Sonos(object):
             except:
                 pass
             try:
-                self.updateStateOnServer(dev, "GROUP_Name", soco_event.variables["local_group_uuid"].decode('utf-8'))
+                # self.updateStateOnServer(dev, "GROUP_Name", soco_event.variables["local_group_uuid"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
+                self.updateStateOnServer(dev, "GROUP_Name", soco_event.variables["local_group_uuid"])
             except:
                 pass
-            if dev.states["GROUP_Coordinator"] == False:
+            if not dev.states["GROUP_Coordinator"]:
                 self.copyStateFromMaster(dev)
             else:
                 self.updateStateOnSlaves(dev)
@@ -1265,15 +1263,18 @@ class Sonos(object):
                 self.logger.debug(f"[{time.asctime()}] [{dev.name}] [SoCo ZoneGroupTopology] {soco_event.variables}")
 
             try:
-                self.updateStateOnServer(dev, "ZoneGroupID", soco_event.variables["zone_group_id"].decode('utf-8'))
+                # self.updateStateOnServer(dev, "ZoneGroupID", soco_event.variables["zone_group_id"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
+                self.updateStateOnServer(dev, "ZoneGroupID", soco_event.variables["zone_group_id"])
             except:
                 pass
             try:
-                self.updateStateOnServer(dev, "ZoneGroupName", soco_event.variables["zone_group_name"].decode('utf-8'))
+                # self.updateStateOnServer(dev, "ZoneGroupName", soco_event.variables["zone_group_name"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
+                self.updateStateOnServer(dev, "ZoneGroupName", soco_event.variables["zone_group_name"])
             except:
                 pass
             try:
-                self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", soco_event.variables["zone_player_uui_ds_in_group"].decode('utf-8'))
+                # self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", soco_event.variables["zone_player_uui_ds_in_group"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
+                self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", soco_event.variables["zone_player_uui_ds_in_group"])
             except:
                 pass
             if dev.states['ZoneGroupName'] in ["", "None"]:
@@ -1282,7 +1283,8 @@ class Sonos(object):
                 self.updateStateOnSlaves(dev)
             """
             try:
-                ZGS = XML(soco_event.variables["zone_group_state"].decode('utf-8'))
+                # ZGS = XML(soco_event.variables["zone_group_state"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
+                ZGS = XML(soco_event.variables["zone_group_state"])
                 for elem in ZGS:
                     for ZoneGroupMember in elem.findall("./ZoneGroupMember"):
                         ZGM_UUID = ZoneGroupMember.get('UUID')
@@ -1331,7 +1333,7 @@ class Sonos(object):
                         loc_end = str(res).find("?sid", loc_beg)
                         loc_end = str(res).find("?sid", loc_beg)
                         val = "http://d1i6vahw24eb07.cloudfront.net/"+self.restoreString(str(res)[loc_beg:loc_end],0)+"q.png"
-                        self.updateStateOnServer (dev, "ZP_ART", val.decode('utf-8'))
+                        self.updateStateOnServer (dev, "ZP_ART", val)
                         if val != prev_art:
                             reqObj = urllib.request.Request(val)
                             fileObj = urlopen(reqObj)
@@ -1341,7 +1343,7 @@ class Sonos(object):
                 elif uri_pandora in res or uri_file in res or uri_music or uri_playlist in res:
                     if str(val).find("/getaa?") >= 0:
                         val = "http://"+self.rootZPIP+":1400"+val
-                    self.updateStateOnServer (dev, "ZP_ART", val.decode('utf-8'))
+                    self.updateStateOnServer (dev, "ZP_ART", val)
                     if val != prev_art:
                         reqObj = urllib.request.Request(val)
                         fileObj = urlopen(reqObj)
@@ -1349,7 +1351,7 @@ class Sonos(object):
                         localFile.write(fileObj.read())
                         localFile.close()
                 elif uri_siriusxm in res:
-                    self.updateStateOnServer (dev, "ZP_ART", val.decode('utf-8'))
+                    self.updateStateOnServer (dev, "ZP_ART", val)
                     if val != prev_art:
                         try:
                             reqObj = urllib.request.Request(val)
@@ -2699,7 +2701,6 @@ class Sonos(object):
                                     self.actionDirect (PA(dev.id), "Q_Clear")
                                     self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>")
 
-                                # SendVar = "<CurrentURI>"+state[7].replace("&", "&amp;")+"</CurrentURI><CurrentURIMetaData>" + state[8].decode('utf-8') + "</CurrentURIMetaData>"  # TODO: CHECK THIS
                                 SendVar = "<CurrentURI>" + state[7].replace("&", "&amp;") + "</CurrentURI><CurrentURIMetaData>" + state[8] + "</CurrentURIMetaData>"
                                 # self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
                                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar)
@@ -2731,7 +2732,6 @@ class Sonos(object):
                         # resture uri
                         if updatedURI[dev.id] == 0:
                             self.logger.debug(f"{state[0]}: Restore URI: {state[7]}")
-                            # SendVar = "<CurrentURI>"+state[7].replace("&", "&amp;")+"</CurrentURI><CurrentURIMetaData>" + state[8].decode('utf-8') + "</CurrentURIMetaData>"
                             SendVar = "<CurrentURI>" + state[7].replace("&", "&amp;") + "</CurrentURI><CurrentURIMetaData>" + state[8] + "</CurrentURIMetaData>"
                             self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
                             updatedURI[dev.id] = 1
