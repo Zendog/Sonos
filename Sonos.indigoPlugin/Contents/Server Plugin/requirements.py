@@ -35,10 +35,18 @@ def requirements_check(plugin_id):
 
         # Process each package entry in the requirements.txt file
         file = open(requirements_path_fn, 'r')
-        while True:
-            line = file.readline()
-            if line == '': break
-            requirements_package, requirements_version = line.split("==")
+        lines = file.readlines()
+        for line in lines:
+            if line == '':  # Ignore if blank line
+                continue
+            if line[0:1] == "#":  # Ignore if a comment line
+                continue
+
+            # Derive requirements_package and requirements_version (allowing for comments)
+            requirements_package, rest_of_line = line.split("==")
+            rest_of_line_split = rest_of_line.split("#")  # separate on trailing comments (if any)
+            requirements_version = rest_of_line_split[0].strip()  # Remove any trailing whitespace
+
             try:
                 plugin_package_version = packages_dict[requirements_package]
             except KeyError as e:
