@@ -277,6 +277,7 @@ class SSDPListener(DatagramProtocol):
         except Exception as exception_error:
             self.sonos_class_self.exception_handler(exception_error, True)  # Log error and display failing statement
 
+
 class Sonos(object):
 
     ######################################################################################
@@ -339,6 +340,8 @@ class Sonos(object):
         else:
             self.lame_platform_folder = "apple_silicon"
 
+        self.optional_packages_checked = plugin.optional_packages_checked  # List of optional packages already checked
+
     def __del__(self):
         pass
 
@@ -355,7 +358,7 @@ class Sonos(object):
     def startup(self):
         try:
             try:
-                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID])
+                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.optional_packages_checked)
             except ImportError as exception_error:
                 self.logger.critical(f"PLUGIN STOPPED: {exception_error}")
                 self.do_not_start_stop_devices = True
@@ -376,7 +379,7 @@ class Sonos(object):
             try:
                 NSVoices = NSSpeechSynthesizer.availableVoices()
                 self.logger.info(f"Loaded Apple Voices.. [{len(NSVoices)}]")
-            except:
+            except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] Cannot load Apple Voices.")
 
             # self.plugin.updater.checkVersionPoll()
@@ -395,7 +398,7 @@ class Sonos(object):
                 if reactor.running:  # noqa
                     try:
                         reactor.stop()  # noqa
-                    except:
+                    except Exception as exception_error:
                         pass
 
         except Exception as exception_error:
@@ -532,7 +535,7 @@ class Sonos(object):
                         self.logger.error(f"[{time.asctime()}] ZonePlayer: {dev.name} has fallen off the network.")
                         dev.setErrorStateOnServer("error")
                         self.socoTimeout(dev)
-                except:
+                except Exception as exception_error:
                     dev.setErrorStateOnServer("error")
                     self.socoTimeout(dev)
 
@@ -595,7 +598,7 @@ class Sonos(object):
                 ZoneName = root.findtext('.//ZoneName')
                 LocalUID = root.findtext('.//LocalUID')
                 SerialNumber = root.findtext('.//SerialNumber')
-            except:
+            except Exception as exception_error:
                 self.logger.error(f"Error getting ZonePlayer data: {url}")
                 self.logger.error(f"  Offending ZonePlayer: {dev.name}")
                 self.logger.error("  ZonePlayer may be physically turned off or in a bad state.")
@@ -710,10 +713,10 @@ class Sonos(object):
                 try:
                     for key2, value2 in value.__dict__.items():
                         print(f"$     {key2}:  {value2}")
-                except:
+                except Exception as exception_error:
                     try:
                         print(f"$     {value}:")
-                    except:
+                    except Exception as exception_error:
                         pass
 
             self.soco_sub[dev.id] = {'soco_dev': SoCo(dev.address),
@@ -746,22 +749,22 @@ class Sonos(object):
         try:
             self.logger.debug(f"[{time.asctime()}] Unsubscribing to ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['avTransport'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from avTransport events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from avTransport events for ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['renderingControl'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from renderingControl events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from renderingControl events for ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['zoneGroupTopology'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from zoneGroupTopology events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from zoneGroupTopology events for ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['queue'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from queue events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from queue events for ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['groupRenderingControl'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from groupRenderingControl events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from groupRenderingControl events for ZonePlayer: {dev.name}")
             try: self.soco_sub[dev.id]['contentDirectory'].unsubscribe()
-            except: self.logger.debug(f"Cannot unsubscribe from contentDirectory events for ZonePlayer: {dev.name}")
+            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from contentDirectory events for ZonePlayer: {dev.name}")
             # try: self.soco_sub[dev.id]['groupManagement'].unsubscribe()
-            # except: self.logger.debug(f"Cannot unsubscribe from groupManagement events for ZonePlayer: {dev.name}")
+            # except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from groupManagement events for ZonePlayer: {dev.name}")
             if int(dev.pluginProps["model"]) in [SONOS_CONNECT, SONOS_CONNECTAMP, SONOS_PLAY5, SONOS_ERA100, SONOS_ERA300]:
                 try: self.soco_sub[dev.id]['audioIn'].unsubscribe()
-                except: self.logger.debug(f"Cannot unsubscribe from audioIn events for ZonePlayer: {dev.name}")
+                except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from audioIn events for ZonePlayer: {dev.name}")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -925,6 +928,8 @@ class Sonos(object):
             except Exception as exception_error:
                 self.logger.error(f"SOAPSend Error: {exception_error}")
 
+
+
             res_bytes = response.text.encode("utf-8")
             res = res_bytes.decode("utf-8")
             status = response.status_code
@@ -932,7 +937,7 @@ class Sonos(object):
                 try:
                     errorCode = self.parseErrorCode(res)
                     self.logger.error(f"UPNP Error: {UPNP_ERRORS[errorCode]}")
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"UPNP Error: {status}")
                 self.logger.error (f"Offending Command -> zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
                 self.logger.error(f"Error Response: {res}")  # TODO: Revert to Debug
@@ -951,7 +956,7 @@ class Sonos(object):
                             pass
                         else:
                             resx = resx + line.rstrip('\n')
-                    except:
+                    except Exception as exception_error:
                         pass
                 else:
                     resx = resx + line.rstrip('\n')
@@ -1016,7 +1021,7 @@ class Sonos(object):
                 if val == "PAUSED_PLAYBACK":
                     val = "PAUSED"
                 self.updateStateOnServer(dev, "ZP_STATE", val)
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 val = soco_event.variables["current_play_mode"]
@@ -1045,7 +1050,7 @@ class Sonos(object):
                         self.updateStateOnServer(dev, "Q_Repeat", "off")
                         self.updateStateOnServer(dev, "Q_RepeatOne", "on")
                         self.updateStateOnServer(dev, "Q_Shuffle", "on")
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 val = soco_event.variables["current_crossfade_mode"]
@@ -1053,23 +1058,23 @@ class Sonos(object):
                     self.updateStateOnServer(dev, "Q_Crossfade", "off")
                 elif val == "1":
                     self.updateStateOnServer(dev, "Q_Crossfade", "on")
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_CurrentTrack", soco_event.variables["current_track"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_CurrentTrackURI", soco_event.variables["current_track_uri"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_CurrentURI", soco_event.variables["av_transport_uri"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_DURATION", soco_event.variables["current_track_duration"])
-            except:
+            except Exception as exception_error:
                 pass
 
             try:
@@ -1081,22 +1086,22 @@ class Sonos(object):
                         # self.logger.info(f"ZP_TRACK val [Type = {type(val)}, Length = {len(val)}]: '{val}'")
                         title = val.title
                         self.updateStateOnServer(dev, "ZP_TRACK", title)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_TRACK", "")
                 try:
                     creator = val.creator
                     self.updateStateOnServer(dev, "ZP_CREATOR", creator)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_CREATOR", "")
                 try:
                     album = val.album
                     self.updateStateOnServer(dev, "ZP_ALBUM", album)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_ALBUM", "")
                 try:
                     artist = val.artist
                     self.updateStateOnServer(dev, "ZP_ARTIST", artist)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_ARTIST", "")
                 try:
                     self.processArt(dev, val.album_art_uri)
@@ -1121,10 +1126,10 @@ class Sonos(object):
                         self.updateStateOnServer(dev, "ZP_INFO", "")
                     else:
                         self.updateStateOnServer(dev, "ZP_INFO", val.stream_content)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_INFO", "")
 
-                # need to figure out when this is really necessary - can't populate for music library
+                # TODO: need to figure out when this is really necessary - can't populate for music library
                 try:
                     if soco_event.variables["enqueued_transport_uri_meta_data"] == "":
                         enqueued_transport_uri_meta_data = None
@@ -1132,10 +1137,10 @@ class Sonos(object):
                         enqueued_transport_uri_meta_data = soco_event.variables["enqueued_transport_uri_meta_data"]
                     title = enqueued_transport_uri_meta_data.title
                     self.updateStateOnServer(dev, "ZP_STATION", title)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_STATION", "")
 
-            except:
+            except Exception as exception_error:
                 pass
 
             try:
@@ -1144,25 +1149,25 @@ class Sonos(object):
                     val = None
                 try:
                     self.updateStateOnServer(dev, "ZP_NTRACK", val.title)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_NTRACK", "")
                 try:
                     self.updateStateOnServer(dev, "ZP_NCREATOR", val.creator)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_NCREATOR", "")
                 try:
                     self.updateStateOnServer(dev, "ZP_NALBUM", val.album)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_NALBUM", "")
                 try:
                     self.updateStateOnServer(dev, "ZP_NARTIST", val.artist)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_NARTIST", "")
                 try:
                     self.updateStateOnServer(dev, "ZP_NART", val.album_art_uri)
-                except:
+                except Exception as exception_error:
                     self.updateStateOnServer(dev, "ZP_NART", "")
-            except:
+            except Exception as exception_error:
                 pass
 
         except Exception as exception_error:
@@ -1175,23 +1180,23 @@ class Sonos(object):
 
             try:
                 self.updateStateOnServer(dev, "ZP_VOLUME", soco_event.variables["volume"]["Master"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_MUTE", soco_event.variables["mute"]["Master"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_VOLUME_FIXED", soco_event.variables["output_fixed"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_BASS", soco_event.variables["bass"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 self.updateStateOnServer(dev, "ZP_TREBLE", soco_event.variables["treble"])
-            except:
+            except Exception as exception_error:
                 pass
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1231,7 +1236,7 @@ class Sonos(object):
                         self.getRT_FavStationsDirect()
                     if "FV:2" in val:
                         self.getSonosFavorites()
-                except:
+                except Exception as exception_error:
                     pass
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1243,12 +1248,12 @@ class Sonos(object):
 
             try:
                 self.updateStateOnServer(dev, "GROUP_Coordinator", str(bool(int(soco_event.variables["group_coordinator_is_local"]))).lower())
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 # self.updateStateOnServer(dev, "GROUP_Name", soco_event.variables["local_group_uuid"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
                 self.updateStateOnServer(dev, "GROUP_Name", soco_event.variables["local_group_uuid"])
-            except:
+            except Exception as exception_error:
                 pass
             if not dev.states["GROUP_Coordinator"]:
                 self.copyStateFromMaster(dev)
@@ -1265,17 +1270,17 @@ class Sonos(object):
             try:
                 # self.updateStateOnServer(dev, "ZoneGroupID", soco_event.variables["zone_group_id"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
                 self.updateStateOnServer(dev, "ZoneGroupID", soco_event.variables["zone_group_id"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 # self.updateStateOnServer(dev, "ZoneGroupName", soco_event.variables["zone_group_name"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
                 self.updateStateOnServer(dev, "ZoneGroupName", soco_event.variables["zone_group_name"])
-            except:
+            except Exception as exception_error:
                 pass
             try:
                 # self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", soco_event.variables["zone_player_uui_ds_in_group"].decode('utf-8'))  # TODO: Remove once confirmed as decode not needed
                 self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", soco_event.variables["zone_player_uui_ds_in_group"])
-            except:
+            except Exception as exception_error:
                 pass
             if dev.states['ZoneGroupName'] in ["", "None"]:
                 self.copyStateFromMaster(dev)
@@ -1295,7 +1300,7 @@ class Sonos(object):
                                 if int(ZGM_BootSeq) > int(dev.states["bootseq"]):
                                     self.socoResubscribe(dev, ZGM_BootSeq)
                                 break
-            except:
+            except Exception as exception_error:
                 pass
             """
         except Exception as exception_error:
@@ -1342,7 +1347,10 @@ class Sonos(object):
                             localFile.close()
                 elif uri_pandora in res or uri_file in res or uri_music or uri_playlist in res:
                     if str(val).find("/getaa?") >= 0:
-                        val = "http://"+self.rootZPIP+":1400"+val
+                        if val[0:4] != "http":  # TODO: Check this - Fix to avoid double http being created in val?
+                            val = "http://"+self.rootZPIP+":1400"+val
+                        if val[0:4] != "http":
+                            self.logger.warning(f"Artwork problem: val field does not start with 'http' = {val}")
                     self.updateStateOnServer (dev, "ZP_ART", val)
                     if val != prev_art:
                         reqObj = urllib.request.Request(val)
@@ -1359,17 +1367,17 @@ class Sonos(object):
                             localFile = open("/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg", "wb")
                             localFile.write(fileObj.read())
                             localFile.close()
-                        except:
+                        except Exception as exception_error:
                             shutil.copy2("sonos_art.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
 
             else:
                 self.updateStateOnServer (dev, "ZP_ART", "")
                 if uri_tv in res:
                     try: shutil.copy2("sonos_tv.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
-                    except:	pass
+                    except Exception as exception_error:	pass
                 else:
                     try: shutil.copy2("sonos_art.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
-                    except: pass
+                    except Exception as exception_error: pass
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -2388,7 +2396,7 @@ class Sonos(object):
                         self.actionDirect (PA(dev.id), "Next")
 
                     self.logger.info(f"[{time.asctime()}] {thumbAction} for station: {PandoraStation}, artist: {partist}, track: {ptrack} on ZonePlayer: {dev.name}")
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Unable to {thumbAction} track on ZonePlzyer: {dev.name}")
 
             else:
@@ -2433,7 +2441,7 @@ class Sonos(object):
 
             try:
                 gc_only = pluginAction.props.get("gc_only")
-            except:
+            except Exception as exception_error:
                 gc_only = False
 
             # need this until group announcement actions are merged
@@ -2623,7 +2631,7 @@ class Sonos(object):
                         if play_chime:
                             chime = MP3("./chime.mp3")
                         success = 1
-                    except:
+                    except Exception as exception_error:
                         self.plugin.sleep(0.5)
                         count = count + 1
 
@@ -2877,22 +2885,22 @@ class Sonos(object):
 
                 try:
                     self.plugin.debug = self.plugin.pluginPrefs["showDebugInLog"]
-                except:
+                except Exception as exception_error:
                     self.plugin.debug = False
 
                 try:
                     self.plugin.xmlDebug = self.plugin.pluginPrefs["showXMLInLog"]
-                except:
+                except Exception as exception_error:
                     self.plugin.xmlDebug = False
 
                 try:
                     self.plugin.eventsDebug = self.plugin.pluginPrefs["showEventsInLog"]
-                except:
+                except Exception as exception_error:
                     self.plugin.eventsDebug = False
 
                 try:
                     self.plugin.stateUpdatesDebug = self.plugin.pluginPrefs["showStateUpdatesInLog"]
-                except:
+                except Exception as exception_error:
                     self.plugin.stateUpdatesDebug = False
 
                 if self.rootZPIP != self.plugin.pluginPrefs["rootZPIP"]:
@@ -2916,20 +2924,20 @@ class Sonos(object):
                         self.logger.error(f"[{time.asctime()}] Reference ZonePlayer IP address invalid.")
 
                 try: self.EventProcessor = self.plugin.pluginPrefs["EventProcessor"]
-                except: self.EventProcessor = "SoCo"
+                except Exception as exception_error: self.EventProcessor = "SoCo"
 
                 try: self.EventIP = self.plugin.pluginPrefs["EventIP"]
-                except: self.logger.error(f"[{time.asctime()}] Could not retrieve Event Listener IP address.")
+                except Exception as exception_error: self.logger.error(f"[{time.asctime()}] Could not retrieve Event Listener IP address.")
 
                 try:
                     self.EventCheck = self.plugin.pluginPrefs["EventCheck"]
-                except:
+                except Exception as exception_error:
                     self.EventCheck = 60
                     self.logger.error(f"[{time.asctime()}] Could not retrieve Event Check Interval; setting to 60 seconds.")
 
                 try:
                     self.SubscriptionCheck = self.plugin.pluginPrefs["SubscriptionCheck"]
-                except:
+                except Exception as exception_error:
                     self.SubscriptionCheck = 15
                     self.logger.error(f"[{time.asctime()}] Could not retrieve Subscription Check Interval; setting to 15 seconds.")
 
@@ -2942,7 +2950,7 @@ class Sonos(object):
                         v = Thread(target=self.HTTPStreamer)
                         v.setDaemon(True)
                         v.start()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] HTTPStreamer not functioning.")
 
                 try:
@@ -2950,7 +2958,7 @@ class Sonos(object):
                         self.SoundFilePath = self.plugin.pluginPrefs["SoundFilePath"]
                         if self.SoundFilePath != None and self.SoundFilePath != "":
                             self.getSoundFiles()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve SoundFilePath.")
 
                 try:
@@ -2964,7 +2972,7 @@ class Sonos(object):
                         self.PandoraNickname = self.plugin.pluginPrefs['PandoraNickname']
                         if self.Pandora:
                             self.getPandora(self.PandoraEmailAddress, self.PandoraPassword, self.PandoraNickname)
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve Pandora credentials.")
 
                 try:
@@ -2978,7 +2986,7 @@ class Sonos(object):
                         self.PandoraNickname2 = self.plugin.pluginPrefs['PandoraNickname2']
                         if self.Pandora2:
                             self.getPandora(self.PandoraEmailAddress2, self.PandoraPassword2, self.PandoraNickname2)
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve secondary Pandora credentials.")
 
                 try:
@@ -2990,7 +2998,7 @@ class Sonos(object):
                         self.SiriusXMPassword = self.plugin.pluginPrefs['SiriusXMPassword']
                         if self.SiriusXM:
                             self.getSiriusXM()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve SiriusXM parameters.")
 
                 try:
@@ -3003,7 +3011,7 @@ class Sonos(object):
                             self.IVONAsecretKey = self.plugin.pluginPrefs['IVONAsecretKey']
                         if self.IVONA:
                             self.IVONAVoices()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve IVONA parameters.")
 
                 try:
@@ -3016,7 +3024,7 @@ class Sonos(object):
                             self.PollysecretKey = self.plugin.pluginPrefs['PollysecretKey']
                         if self.Polly:
                             self.PollyVoices()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve Polly parameters.")
 
                 try:
@@ -3029,7 +3037,7 @@ class Sonos(object):
                             self.MSTranslateClientSecret = self.plugin.pluginPrefs['MSTranslateClientSecret']
                         if self.MSTranslate:
                             self.MSTranslateVoices = self.MicrosoftTranslateLanguages()
-                except:
+                except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve MSTranslate parameters.")
 
                 self.logger.info(f"[{time.asctime()}] Processed plugin preferences.")
@@ -3213,11 +3221,11 @@ class Sonos(object):
                 locale = re.split('-|_', NSSpeechSynthesizer.attributesForVoice_(voice)['VoiceLocaleIdentifier'])
                 try:
                     vl = language_codes.languages[locale[0]].encode('utf-8')
-                except:
+                except Exception as exception_error:
                     vl = locale[0]
                 try:
                     vc = language_codes.countries[locale[1]].encode('utf-8')
-                except:
+                except Exception as exception_error:
                     vc = locale[1]
                 # array.append((voice,  vc + ', ' +  vl + ' | ' + name))
 
@@ -3228,11 +3236,11 @@ class Sonos(object):
 
                 try:
                     vc = vc.decode("utf-8")
-                except:
+                except Exception as exception_error:
                     pass
                 try:
                     vl = vl.decode("utf-8")
-                except:
+                except Exception as exception_error:
                     pass
 
                 array.append((voice, f"{vc}, {vl} | {name}"))
@@ -3347,7 +3355,7 @@ class Sonos(object):
                     try:
                         shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg",
                                      "/Library/Application Support/Perceptive Automation/images/Sonos/"+rdev.states['ZP_ZoneName']+"_art.jpg")
-                    except:
+                    except Exception as exception_error:
                         pass
 
         except Exception as exception_error:
@@ -3358,7 +3366,7 @@ class Sonos(object):
             self.logger.debug("Copy states from master ZonePlayer...")
             try:
                 MasterUID, x = dev.states['GROUP_Name'].split(":")
-            except:
+            except Exception as exception_error:
                 self.logger.error(f"copyStateFromMaster - Unable to split Group Name: {dev.states['GROUP_Name']}")
                 return
 
@@ -3376,7 +3384,7 @@ class Sonos(object):
                     try:
                         shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+mdev.states['ZP_ZoneName']+"_art.jpg", \
                                      "/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg")
-                    except:
+                    except Exception as exception_error:
                         pass
 
         except Exception as exception_error:
@@ -3560,7 +3568,7 @@ class Sonos(object):
             #		self.logger.debug(f'\tSiriusXM: {item.title}')
             #	Sonos_SiriusXM.sort(key=lambda x:x[0])
             #	self.logger.info(f"Loaded SiriusXM Stations.. [{len(SiriusXMChannels)}]")
-            #except:
+            # except Exception as exception_error:
             #	self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
 
             # attempt 3 with Sonos Music API
@@ -3592,11 +3600,11 @@ class Sonos(object):
                 response = requests.post(base_url, headers=headers, data=SoapMessage.encode("utf-8"))
                 root = ET.fromstring(response.content)
                 SessionID = root.findtext('.//ns1:getSessionIdResult', namespaces=namespaces)
-            except:
+            except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] SiriusXM SessionID communications error")
                 return
 
-            if SessionID == None:
+            if SessionID is None:
                 self.logger.error(f"[{time.asctime()}] SiriusXM SessionID error, check credentials")
                 return
 
@@ -3632,7 +3640,7 @@ class Sonos(object):
                     self.logger.debug(f'\tSiriusXM: {xm_title}')
                 Sonos_SiriusXM.sort(key=lambda x:x[0])
                 self.logger.info(f"Loaded SiriusXM Stations.. [{len(Sonos_SiriusXM)}]")
-            except:
+            except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
 
         except Exception as exception_error:

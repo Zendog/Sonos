@@ -18,7 +18,7 @@ except ImportError:
 # import time  # TODO: REMOVE THIS AS DEBUGGING ONLY
 
 
-def requirements_check(plugin_id):
+def requirements_check(plugin_id, logger, optional_packages_checked):
     try:
         pip_version = f'pip{sys.version_info.major}.{sys.version_info.minor}'
 
@@ -37,6 +37,7 @@ def requirements_check(plugin_id):
         file = open(requirements_path_fn, 'r')
         lines = file.readlines()
         for line in lines:
+            optional = False
             if line == '':  # Ignore if blank line
                 continue
             if line[0:1] == "#":  # Ignore if a comment line
@@ -47,14 +48,25 @@ def requirements_check(plugin_id):
             rest_of_line_split = rest_of_line.split("#")  # separate on trailing comments (if any)
             requirements_version = rest_of_line_split[0].strip()  # Remove any trailing whitespace
 
+            if "OPTIONAL" in line:
+                optional = True
+
             try:
                 plugin_package_version = packages_dict[requirements_package]
             except KeyError as e:
-                raise ImportError(f"'{requirements_package}' Package missing.\n\n========> Run '{pip_version} install {requirements_package}' in Terminal window, then reload plugin. <========\n")
+                if not optional:
+                    raise ImportError(f"'{requirements_package}' Package missing."
+                                      f"\n\n========> Run '{pip_version} install {requirements_package}' in Terminal window, then reload plugin. <========\n")
+                else:
+                    if requirements_package not in optional_packages_checked:
+                        logger.warning(f"'Optional {requirements_package}' Package missing.\n\n"
+                                       f"========> If you need it, run '{pip_version} install {requirements_package}' in Terminal window, then reload plugin. <========\n")
+                        optional_packages_checked.append(requirements_package)
+                    continue
 
-            if version.parse(plugin_package_version) < version.parse(requirements_version):
-                raise ImportError(
-                    f"'{requirements_package}' (version {version.parse(plugin_package_version)}) Package should be updated to version: {version.parse(requirements_version)}.\n\n========> Run '{pip_version} install --upgrade {requirements_package}' in a Terminal window, then reload plugin. <========\n")
+            if version.parse(plugin_package_version) < version.parse(requirements_version):  # noqa
+                raise ImportError(f"'{requirements_package}' (version {version.parse(plugin_package_version)}) Package should be updated to version: {version.parse(requirements_version)}."
+                                  f"\n\n========> Run '{pip_version} install --upgrade {requirements_package}' in a Terminal window, then reload plugin. <========\n")
 
     except IOError as exception_message:
         raise IOError(f"Unable to access requirements file to check required packages. IO Error: {exception_message}")

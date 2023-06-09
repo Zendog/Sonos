@@ -63,6 +63,8 @@ class Plugin(indigo.PluginBase):
 
         # Original Sonos plugin
 
+        self.optional_packages_checked = list()  # List of optional packages already checked
+
         if imports_successful:
             self.Sonos = Sonos(self)
         self.debug = False
@@ -118,7 +120,7 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         try:
             try:
-                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID])
+                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.optional_packages_checked)
             except ImportError as exception_error:
                 self.logger.critical(f"PLUGIN STOPPED: {exception_error}")
                 self.do_not_start_stop_devices = True
