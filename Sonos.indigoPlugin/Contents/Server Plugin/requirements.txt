@@ -3,7 +3,7 @@ gTTS==2.3.2
 ifaddr==0.2.0
 lxml==4.9.2
 mutagen==1.46.0
-pandora==1.5.0 # OPTIONAL
+# OPTIONAL pandora==1.5.0
 pyvona==1.2.1
 Twisted==22.10.0
 xmltodict==0.13.0

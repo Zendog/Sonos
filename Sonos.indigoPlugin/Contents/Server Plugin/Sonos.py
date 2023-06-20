@@ -282,7 +282,7 @@ class Sonos(object):
 
     ######################################################################################
     # class init & del
-    def __init__(self, plugin):
+    def __init__(self, plugin, pluginPrefs):
         self.globals = plugin.globals  # Autolog additiom
         self.logger = logging.getLogger("Plugin.Sonos")  # Autolog additiom
 
@@ -341,6 +341,9 @@ class Sonos(object):
             self.lame_platform_folder = "apple_silicon"
 
         self.optional_packages_checked = plugin.optional_packages_checked  # List of optional packages already checked
+
+        # Set Plugin Config Values - Autolog additiom
+        self.closedPrefsConfigUi(pluginPrefs, False)  # Autolog additiom
 
     def __del__(self):
         pass

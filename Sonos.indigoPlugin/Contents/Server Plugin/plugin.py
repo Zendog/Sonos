@@ -66,7 +66,7 @@ class Plugin(indigo.PluginBase):
         self.optional_packages_checked = list()  # List of optional packages already checked
 
         if imports_successful:
-            self.Sonos = Sonos(self)
+            self.Sonos = Sonos(self, pluginPrefs)
         self.debug = False
         self.xmlDebug = False
         self.eventsDebug = False
