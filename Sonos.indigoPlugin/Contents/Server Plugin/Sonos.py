@@ -283,6 +283,7 @@ class Sonos(object):
     ######################################################################################
     # class init & del
     def __init__(self, plugin, pluginPrefs):
+
         self.globals = plugin.globals  # Autolog additiom
         self.logger = logging.getLogger("Plugin.Sonos")  # Autolog additiom
 
@@ -300,7 +301,7 @@ class Sonos(object):
         self.Pandora = None
         self.PandoraEmailAddress = None
         self.PandoraPassword = None
-        self.PandoraNickName = None
+        self.PandoraNickname = None
         self.Pandora2 = None
         self.PandoraEmailAddress2 = None
         self.PandoraPassword2 = None
@@ -444,7 +445,10 @@ class Sonos(object):
             Protocol = "HTTP/1.0"
 
             if self.HTTPStreamingIP == "auto":
-                self.HTTPServer = socket.gethostbyname(socket.gethostname())
+                try:
+                    self.HTTPServer = socket.gethostbyname(socket.gethostname())
+                except Exception as exception_error:
+                    self.HTTPServer = None
                 if self.HTTPServer is None:
                     d = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     d.connect(("indigodomo.com",80))
@@ -2906,8 +2910,9 @@ class Sonos(object):
                 except Exception as exception_error:
                     self.plugin.stateUpdatesDebug = False
 
-                if self.rootZPIP != self.plugin.pluginPrefs["rootZPIP"]:
-                    self.rootZPIP = self.plugin.pluginPrefs["rootZPIP"]
+                rootZPIP = self.plugin.pluginPrefs.get("rootZPIP", "auto")
+                if self.rootZPIP != rootZPIP:
+                    self.rootZPIP = rootZPIP
                     if self.rootZPIP == 'auto':
                         self.rootZPIP = self.getReferencePlayerIP()
                         self.logger.info(f"Using Reference ZonePlayer IP: {self.rootZPIP}")

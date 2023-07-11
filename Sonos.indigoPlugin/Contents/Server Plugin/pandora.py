@@ -23,6 +23,7 @@ class Pandora(object):
         self.connection = PandoraConnection()
 
     def authenticate(self, username, password):
+        # print(f"Pandora Authenticate: {username}, {password}")
         self.is_authenticated = self.connection.authenticate(username, password)
         return self.is_authenticated
 
