@@ -1,0 +1,5 @@
+# File: Packages/.gitignore
+# Ignore everything in the Packages directory
+*
+# Except for this file
+!.gitignore
