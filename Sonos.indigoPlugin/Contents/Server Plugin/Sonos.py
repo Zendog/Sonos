@@ -3,7 +3,6 @@
 #
 
 import requirements  # Autolog additiom
-
 from constants import *
 import locale
 import sys
@@ -362,7 +361,7 @@ class Sonos(object):
     def startup(self):
         try:
             try:
-                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.optional_packages_checked)
+                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
             except ImportError as exception_error:
                 self.logger.critical(f"PLUGIN STOPPED: {exception_error}")
                 self.do_not_start_stop_devices = True
