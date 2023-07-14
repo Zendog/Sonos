@@ -55,6 +55,8 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
         # Process each package entry in the requirements.txt file
         file = open(requirements_path_fn, 'r')
         lines = file.readlines()
+        package_names_to_install_or_update_list = list()
+        package_pip_commands_to_install_or_update = ""
         for line in lines:
             optional = False
             if line == '':  # Ignore if blank line
@@ -72,18 +74,22 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
 
             try:
                 plugin_package_version = packages_dict[requirements_package]
-            except KeyError as e:
+            except KeyError as exception_error:
                 if not optional:
                     target = ""
                     if requirements_package == "lxml":
                         target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
-                    results = (f"{results}\n\n'{requirements_package}' package is not installed. Correct this by running the following command in a Terminal window:"
-                               f"\n========> {pip_version} install {requirements_package}{target} <========\n")
+                    package_names_to_install_or_update_list.append(requirements_package)
+                    package_pip_commands_to_install_or_update = f"{package_pip_commands_to_install_or_update}{pip_version} install {requirements_package}=={version.parse(requirements_version)}{target}\n"
+
+                    # results = (f"{results}\n\n'{requirements_package}' package is not installed. Correct this by running the following command in a Terminal window:"
+                    #            f"\n========> {pip_version} install {requirements_package}=={version.parse(requirements_version)}{target} <========\n")
                     continue
                 else:
                     if requirements_package not in optional_packages_checked:
                         optionals = (f"{optionals}\nOptional '{requirements_package}' Package missing.\n\n"
-                                     f"========> If you need it, in a Terminal window: ========> {pip_version} install {requirements_package} <========\n")
+                                     "If you need it, copy and paste the following pip command into a terminal window and press return:\n\n"
+                                     f"{pip_version} install {requirements_package}=={version.parse(requirements_version)}\n")
                         optional_packages_checked.append(requirements_package)
                     continue
 
@@ -91,11 +97,33 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
                 target = ""
                 if requirements_package == "lxml":
                     target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
-                results = (f"\n{results}\n'{requirements_package}' (version {version.parse(plugin_package_version)}) Package should be updated to version: {version.parse(requirements_version)}."
-                           f"\nRun in a Terminal window: ========> {pip_version} install --upgrade {requirements_package}{target} <========\n")
+                package_names_to_install_or_update_list.append(requirements_package)
+                package_pip_commands_to_install_or_update = f"{package_pip_commands_to_install_or_update}{pip_version} install --upgrade {requirements_package}=={version.parse(requirements_version)}{target}\n"
 
-        if results != "":
-            raise ImportError(f"\n{results}\nOnce the package(s) listed above have been installed | updated, reload the Plugin. \n")
+                # results = (f"\n{results}\n'{requirements_package}' (version {version.parse(plugin_package_version)}) Package should be updated to version: {version.parse(requirements_version)}."
+                #            f"\nRun in a Terminal window: ========> {pip_version} install --upgrade {requirements_package}=={version.parse(requirements_version)}{target} <========\n")
+
+        if len(package_names_to_install_or_update_list) > 0:
+            if len(package_names_to_install_or_update_list) == 1:
+                pip_message = f"The '{package_names_to_install_or_update_list[0]}' package needs to be installed or updated."
+                command_ui = "command"
+            else:
+                package_names = ""
+                for package_name in package_names_to_install_or_update_list:
+                    if package_names == "":
+                        package_names = f"'{package_name}'"
+                    else:
+                        if package_name == package_names_to_install_or_update_list[len(package_names_to_install_or_update_list)-1]:
+                            package_names = f"{package_names} and '{package_name}'"
+                        else:
+                            package_names = f"{package_names}, '{package_name}'"
+                pip_message = f"The {package_names} packages need to be installed or updated."
+                command_ui = "commands"
+            pip_message = f"{pip_message}\n\nCopy and paste the following pip {command_ui} into a terminal window and press return:\n"
+            pip_message = f"{pip_message}\n{package_pip_commands_to_install_or_update}"
+            pip_message = f"\n\n{pip_message}\n\nOnce installed | updated, reload the Plugin. \n\n"
+            raise ImportError(pip_message)
+
         if optionals != "":
             logger.warning(f"\n{optionals}\nOnce any of the optional package(s) listed above have been installed, reload the Plugin. \n")
 

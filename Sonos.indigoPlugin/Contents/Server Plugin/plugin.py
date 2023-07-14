@@ -75,21 +75,21 @@ class Plugin(indigo.PluginBase):
 
         self.logger = logging.getLogger("Plugin.Sonos")
 
-        # # Create Plugin Packages folder if it doesn't exist
-        # self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.python_packages"
-        # if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
-        #     self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
-        #
-        # Now tell Python to search for packages in the Plugin Packages folder
-        # sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
-        #
-        # print(sys.path)
-
-        # Create Plugin Resources folder if it doesn't exist
-        self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Plugins/Sonos.indigoPlugin/Contents/Packages"
-
+        # Create Plugin Packages folder if it doesn't exist
+        self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.python_packages"
         if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
             self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
+
+        # Now tell Python to search for packages in the Plugin Packages folder
+        sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
+
+        print(sys.path)
+
+        # # Create Plugin Resources folder if it doesn't exist
+        # self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Plugins/Sonos.indigoPlugin/Contents/Packages"
+        #
+        # if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
+        #     self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
 
         # Now tell Python to search for packages in the Plugin Packages folder
         # sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
@@ -196,7 +196,7 @@ class Plugin(indigo.PluginBase):
             try:
                 requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
             except ImportError as exception_error:
-                self.logger.critical(f"PLUGIN STOPPED AS PACKAGE(S) REQUIRE INSTALLING: {exception_error}")
+                self.logger.critical(f"PLUGIN STOPPED AS PYTHON PACKAGE(S) REQUIRE INSTALLING | UPDATING: {exception_error}")
                 self.do_not_start_stop_devices = True
                 self.stopPlugin()
 
