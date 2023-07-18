@@ -218,7 +218,7 @@ IVONAlanguages = {'en-US': 'English, American',
                   'tr-TR': 'Turkish',
                   'nb-NO': 'Norweigian'
                   }
-## IVONAlanguages['en-US'] = 'English, American'
+# IVONAlanguages['en-US'] = 'English, American'
 
 IVONAVoices = []
 PollyVoices = []
@@ -365,9 +365,9 @@ class Sonos(object):
             self.logger.debug("Sonos Plugin Startup...")
 
             logging.getLogger("requests").setLevel(logging.WARNING)
-            #logging.getLogger("soco").setLevel(logging.INFO)
+            # logging.getLogger("soco").setLevel(logging.INFO)
 
-            if os.path.exists ('/Library/Application Support/Perceptive Automation/images/Sonos') == 0:
+            if os.path.exists('/Library/Application Support/Perceptive Automation/images/Sonos') == 0:
                 os.makedirs('/Library/Application Support/Perceptive Automation/images/Sonos')
 
             self.closedPrefsConfigUi(None, None)
@@ -443,7 +443,7 @@ class Sonos(object):
                     self.HTTPServer = None
                 if self.HTTPServer is None:
                     d = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    d.connect(("indigodomo.com",80))
+                    d.connect(("indigodomo.com", 80))
                     self.HTTPServer = d.getsockname()[0]
                     d.close()
             else:
@@ -454,13 +454,13 @@ class Sonos(object):
             self.httpd = ServerClass(server_address, HandlerClass)
 
             sa = self.httpd.socket.getsockname()
-            self.logger.info (f"Serving HTTP Streamer on {self.HTTPServer} [{sa[0]}], port {sa[1]}")
+            self.logger.info(f"Serving HTTP Streamer on {self.HTTPServer} [{sa[0]}], port {sa[1]}")
             self.HTTPStreamerOn = True
             while self.HTTPStreamerOn:
                 self.httpd.handle_request()
 
         # except Exception as e:
-        #     self.logger.error (f"Cannot start HTTP Streamer on {self.HTTPServer}: {e}")
+        #     self.logger.error(f"Cannot start HTTP Streamer on {self.HTTPServer}: {e}")
         except Exception as exception_error:
             self.exception_handler(f"Cannot start HTTP Streamer on {self.HTTPServer}: {exception_error}", True)  # Log error and display failing statement
 
@@ -511,7 +511,7 @@ class Sonos(object):
             self.logger.info("Restarting Sonos Plugin...")
             self.plugin.stopConcurrentThread()
             SonosPlug = indigo.server.getPlugin("com.ssi.indigoplugin.Sonos")
-            SonosPlug.restart (waitUntilDone=True)
+            SonosPlug.restart(waitUntilDone=True)
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -541,7 +541,6 @@ class Sonos(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-
     ######################################################################################
     # Check for messages
 
@@ -549,46 +548,46 @@ class Sonos(object):
         try:
             zoneIP = dev.pluginProps["address"]
             self.logger.debug(f"Resetting States for zone: {zoneIP}")
-            self.updateStateOnServer (dev, "ZP_ALBUM", "")
-            self.updateStateOnServer (dev, "ZP_ART", "")
-            self.updateStateOnServer (dev, "ZP_ARTIST", "")
-            self.updateStateOnServer (dev, "ZP_CREATOR", "")
-            self.updateStateOnServer (dev, "ZP_CurrentURI", "")
-            self.updateStateOnServer (dev, "ZP_DURATION", "")
-            self.updateStateOnServer (dev, "ZP_RELATIVE", "")
-            self.updateStateOnServer (dev, "ZP_INFO", "")
-            self.updateStateOnServer (dev, "ZP_MUTE", "")
-            self.updateStateOnServer (dev, "ZP_STATE", "")
-            self.updateStateOnServer (dev, "ZP_STATION", "")
-            self.updateStateOnServer (dev, "ZP_TRACK", "")
-            self.updateStateOnServer (dev, "ZP_VOLUME", "")
-            self.updateStateOnServer (dev, "ZP_VOLUME_FIXED", "")
-            self.updateStateOnServer (dev, "ZP_BASS", "")
-            self.updateStateOnServer (dev, "ZP_TREBLE", "")
-            self.updateStateOnServer (dev, "ZP_ZoneName", "")
-            self.updateStateOnServer (dev, "ZP_LocalUID", "")
-            self.updateStateOnServer (dev, "ZP_AIName", "")
-            self.updateStateOnServer (dev, "ZP_AIPath", "")
-            self.updateStateOnServer (dev, "ZP_NALBUM", "")
-            self.updateStateOnServer (dev, "ZP_NART", "")
-            self.updateStateOnServer (dev, "ZP_NARTIST", "")
-            self.updateStateOnServer (dev, "ZP_NCREATOR", "")
-            self.updateStateOnServer (dev, "ZP_NTRACK", "")
-            self.updateStateOnServer (dev, "Q_Crossfade", "off")
-            self.updateStateOnServer (dev, "Q_Repeat", "off")
-            self.updateStateOnServer (dev, "Q_RepeatOne", "off")
-            self.updateStateOnServer (dev, "Q_Shuffle", "off")
-            self.updateStateOnServer (dev, "Q_Number", "0")
-            self.updateStateOnServer (dev, "Q_ObjectID", "")
-            self.updateStateOnServer (dev, "GROUP_Coordinator", "")
-            self.updateStateOnServer (dev, "GROUP_Name", "")
-            self.updateStateOnServer (dev, "ZP_CurrentTrack", "")
-            self.updateStateOnServer (dev, "ZP_CurrentTrackURI", "")
-            self.updateStateOnServer (dev, "ZoneGroupID", "")
-            self.updateStateOnServer (dev, "ZoneGroupName", "")
-            self.updateStateOnServer (dev, "ZonePlayerUUIDsInGroup", "")
-            self.updateStateOnServer (dev, "alive", "")
-            self.updateStateOnServer (dev, "bootseq", "")
+            self.updateStateOnServer(dev, "ZP_ALBUM", "")
+            self.updateStateOnServer(dev, "ZP_ART", "")
+            self.updateStateOnServer(dev, "ZP_ARTIST", "")
+            self.updateStateOnServer(dev, "ZP_CREATOR", "")
+            self.updateStateOnServer(dev, "ZP_CurrentURI", "")
+            self.updateStateOnServer(dev, "ZP_DURATION", "")
+            self.updateStateOnServer(dev, "ZP_RELATIVE", "")
+            self.updateStateOnServer(dev, "ZP_INFO", "")
+            self.updateStateOnServer(dev, "ZP_MUTE", "")
+            self.updateStateOnServer(dev, "ZP_STATE", "")
+            self.updateStateOnServer(dev, "ZP_STATION", "")
+            self.updateStateOnServer(dev, "ZP_TRACK", "")
+            self.updateStateOnServer(dev, "ZP_VOLUME", "")
+            self.updateStateOnServer(dev, "ZP_VOLUME_FIXED", "")
+            self.updateStateOnServer(dev, "ZP_BASS", "")
+            self.updateStateOnServer(dev, "ZP_TREBLE", "")
+            self.updateStateOnServer(dev, "ZP_ZoneName", "")
+            self.updateStateOnServer(dev, "ZP_LocalUID", "")
+            self.updateStateOnServer(dev, "ZP_AIName", "")
+            self.updateStateOnServer(dev, "ZP_AIPath", "")
+            self.updateStateOnServer(dev, "ZP_NALBUM", "")
+            self.updateStateOnServer(dev, "ZP_NART", "")
+            self.updateStateOnServer(dev, "ZP_NARTIST", "")
+            self.updateStateOnServer(dev, "ZP_NCREATOR", "")
+            self.updateStateOnServer(dev, "ZP_NTRACK", "")
+            self.updateStateOnServer(dev, "Q_Crossfade", "off")
+            self.updateStateOnServer(dev, "Q_Repeat", "off")
+            self.updateStateOnServer(dev, "Q_RepeatOne", "off")
+            self.updateStateOnServer(dev, "Q_Shuffle", "off")
+            self.updateStateOnServer(dev, "Q_Number", "0")
+            self.updateStateOnServer(dev, "Q_ObjectID", "")
+            self.updateStateOnServer(dev, "GROUP_Coordinator", "")
+            self.updateStateOnServer(dev, "GROUP_Name", "")
+            self.updateStateOnServer(dev, "ZP_CurrentTrack", "")
+            self.updateStateOnServer(dev, "ZP_CurrentTrackURI", "")
+            self.updateStateOnServer(dev, "ZoneGroupID", "")
+            self.updateStateOnServer(dev, "ZoneGroupName", "")
+            self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", "")
+            self.updateStateOnServer(dev, "alive", "")
+            self.updateStateOnServer(dev, "bootseq", "")
 
             url = "http://" + zoneIP + ":1400/status/zp"
             try:
@@ -607,20 +606,20 @@ class Sonos(object):
                 return
 
             # Allow for special characters in ZoneName
-            self.updateStateOnServer (dev, "ZP_ZoneName", ZoneName)
-            self.updateStateOnServer (dev, "ZP_LocalUID", LocalUID)
-            self.updateStateOnServer (dev, "SerialNumber", SerialNumber)
+            self.updateStateOnServer(dev, "ZP_ZoneName", ZoneName)
+            self.updateStateOnServer(dev, "ZP_LocalUID", LocalUID)
+            self.updateStateOnServer(dev, "SerialNumber", SerialNumber)
 
-            self.getModelName (dev)
+            self.getModelName(dev)
 
-            self.updateZoneGroupStates (dev)
-            self.updateZoneTopology (dev)
+            self.updateZoneGroupStates(dev)
+            self.updateZoneTopology(dev)
 
             self.logger.info(f"Adding ZonePlayer: {zoneIP}, {LocalUID}, {dev.name}")
-            self.ZonePlayers.append (LocalUID)
+            self.ZonePlayers.append(LocalUID)
             self.ZPTypes.append([LocalUID, dev.pluginProps["model"]])
 
-            self.zonePlayerState[dev.id] = {'zonePlayerAlive':True}
+            self.zonePlayerState[dev.id] = {'zonePlayerAlive': True}
             self.updateStateOnServer(dev, "alive", time.asctime())
 
             if self.EventProcessor == "SoCo":
@@ -652,7 +651,7 @@ class Sonos(object):
                 if not self.soco_sub[dev.id]['zoneGroupTopology'].is_subscribed:
                     self.logger.debug(f"[{time.asctime()}] [{dev.name}]: zoneGroupTopology subscription failed.  Resubscribing...")
                     subStatus = False
-                if self.soco_sub[dev.id]['queue'].is_subscribed != True:
+                if not self.soco_sub[dev.id]['queue'].is_subscribed:
                     self.logger.debug(f"[{time.asctime()}] [{dev.name}]: queue subscription failed.  Resubscribing...")
                     subStatus = False
                 if not self.soco_sub[dev.id]['groupRenderingControl'].is_subscribed:
@@ -661,7 +660,7 @@ class Sonos(object):
                 if not self.soco_sub[dev.id]['contentDirectory'].is_subscribed:
                     self.logger.debug(f"[{time.asctime()}] [{dev.name}]: contentDirectory subscription failed.  Resubscribing...")
                     subStatus = False
-                # if self.soco_sub[dev.id]['groupManagement'].is_subscribed != True:
+                # if not self.soco_sub[dev.id]['groupManagement'].is_subscribed:
                 #     self.logger.debug(f"[{time.asctime()}] [{dev.name}]: groupManagement subscription failed.  Resubscribing...")
                 #     subStatus = False
                 if int(dev.pluginProps["model"]) in [SONOS_CONNECT, SONOS_CONNECTAMP, SONOS_PLAY5, SONOS_ERA100, SONOS_ERA300]:
@@ -669,8 +668,8 @@ class Sonos(object):
                         self.logger.debug(f"[{time.asctime()}] [{dev.name}]: audioIn subscription failed.  Resubscribing...")
                         subStatus = False
                 if not subStatus:
-                    self.socoUnsubscribe (dev)
-                    self.socoSubscribe (dev)
+                    self.socoUnsubscribe(dev)
+                    self.socoSubscribe(dev)
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -679,8 +678,8 @@ class Sonos(object):
         try:
             for item in self.deviceList:
                 dev = indigo.devices[item]
-                self.socoUnsubscribe (dev)
-                self.socoSubscribe (dev)
+                self.socoUnsubscribe(dev)
+                self.socoSubscribe(dev)
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
@@ -727,7 +726,6 @@ class Sonos(object):
                                      # 'groupManagement': SoCo(dev.address).GroupManagement.subscribe(requested_timeout=600, auto_renew=True).subscription,
                                      'contentDirectory': SoCo(dev.address).contentDirectory.subscribe(requested_timeout=600, auto_renew=True).subscription}
 
-
             if int(dev.pluginProps["model"]) in [SONOS_CONNECT, SONOS_CONNECTAMP, SONOS_PLAY5, SONOS_ERA100, SONOS_ERA300]:
                 self.soco_sub[dev.id]['audioIn'] = SoCo(dev.address).audioIn.subscribe(requested_timeout=600, auto_renew=True).subscription
 
@@ -747,23 +745,38 @@ class Sonos(object):
     def socoUnsubscribe(self, dev):
         try:
             self.logger.debug(f"[{time.asctime()}] Unsubscribing to ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['avTransport'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from avTransport events for ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['renderingControl'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from renderingControl events for ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['zoneGroupTopology'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from zoneGroupTopology events for ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['queue'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from queue events for ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['groupRenderingControl'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from groupRenderingControl events for ZonePlayer: {dev.name}")
-            try: self.soco_sub[dev.id]['contentDirectory'].unsubscribe()
-            except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from contentDirectory events for ZonePlayer: {dev.name}")
-            # try: self.soco_sub[dev.id]['groupManagement'].unsubscribe()
+            try: 
+                self.soco_sub[dev.id]['avTransport'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from avTransport events for ZonePlayer: {dev.name}")
+            try: 
+                self.soco_sub[dev.id]['renderingControl'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from renderingControl events for ZonePlayer: {dev.name}")
+            try: 
+                self.soco_sub[dev.id]['zoneGroupTopology'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from zoneGroupTopology events for ZonePlayer: {dev.name}")
+            try: 
+                self.soco_sub[dev.id]['queue'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from queue events for ZonePlayer: {dev.name}")
+            try: 
+                self.soco_sub[dev.id]['groupRenderingControl'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from groupRenderingControl events for ZonePlayer: {dev.name}")
+            try: 
+                self.soco_sub[dev.id]['contentDirectory'].unsubscribe()
+            except Exception as exception_error: 
+                self.logger.debug(f"Cannot unsubscribe from contentDirectory events for ZonePlayer: {dev.name}")
+            # try: 
+            #     self.soco_sub[dev.id]['groupManagement'].unsubscribe()
             # except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from groupManagement events for ZonePlayer: {dev.name}")
             if int(dev.pluginProps["model"]) in [SONOS_CONNECT, SONOS_CONNECTAMP, SONOS_PLAY5, SONOS_ERA100, SONOS_ERA300]:
-                try: self.soco_sub[dev.id]['audioIn'].unsubscribe()
-                except Exception as exception_error: self.logger.debug(f"Cannot unsubscribe from audioIn events for ZonePlayer: {dev.name}")
+                try: 
+                    self.soco_sub[dev.id]['audioIn'].unsubscribe()
+                except Exception as exception_error: 
+                    self.logger.debug(f"Cannot unsubscribe from audioIn events for ZonePlayer: {dev.name}")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -775,7 +788,7 @@ class Sonos(object):
             if response.ok:
                 root = ET.fromstring(response.content)
                 ModelName = root.findtext('.//{urn:schemas-upnp-org:device-1-0}displayName')
-                self.updateStateOnServer (dev, "ModelName", ModelName)
+                self.updateStateOnServer(dev, "ModelName", ModelName)
             else:
                 self.logger.error(f"[{time.asctime()}] Cannot get ModelName for ZonePlayer: {dev.name}")
 
@@ -784,29 +797,29 @@ class Sonos(object):
 
     def updateZoneTopology(self, dev):
         try:
-            # Deprecated in Sonos 10.1
-            #url = "http://" + dev.pluginProps["address"] + ":1400/status/topology"
-            #response = requests.get(url)
-            #if response.ok:
-            #	root = ET.fromstring(response.content)
-            #	for ZonePlayer in root.findall("./ZonePlayers/ZonePlayer"):
-            #		if ZonePlayer.get('uuid') == dev.states['ZP_LocalUID']:
-            #			self.updateStateOnServer (dev, "GROUP_Coordinator", ZonePlayer.get('coordinator'))
-            #			self.updateStateOnServer (dev, "bootseq", ZonePlayer.get('bootseq'))
-            #else:
+            # # Deprecated in Sonos 10.1
+            # url = "http://" + dev.pluginProps["address"] + ":1400/status/topology"
+            # response = requests.get(url)
+            # if response.ok:
+            # 	root = ET.fromstring(response.content)
+            # 	for ZonePlayer in root.findall("./ZonePlayers/ZonePlayer"):
+            # 		if ZonePlayer.get('uuid') == dev.states['ZP_LocalUID']:
+            # 			self.updateStateOnServer (dev, "GROUP_Coordinator", ZonePlayer.get('coordinator'))
+            # 			self.updateStateOnServer (dev, "bootseq", ZonePlayer.get('bootseq'))
+            # else:
             #    self.logger.error(f"[{time.asctime()}] Cannot get ZoneGroupTopology for ZonePlayer: {dev.name}")
 
-            res = self.restoreString(self.SOAPSend (self.rootZPIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupState", ""),1)
+            res = self.restoreString(self.SOAPSend(self.rootZPIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupState", ""), 1)
             ZGS = ET.fromstring(res)
             for ZoneGroup in ZGS.findall('.//ZoneGroup'):
                 for ZonePlayer in ZoneGroup.findall('.//ZoneGroupMember'):
                     if ZonePlayer.attrib['UUID'] == dev.states['ZP_LocalUID']:
                         if ZonePlayer.attrib['UUID'] == ZoneGroup.attrib['Coordinator']:
-                            self.updateStateOnServer (dev, "GROUP_Coordinator", 'true')
+                            self.updateStateOnServer(dev, "GROUP_Coordinator", 'true')
                         else:
-                            self.updateStateOnServer (dev, "GROUP_Coordinator", 'false')
-                        self.updateStateOnServer (dev, "GROUP_Name", ZoneGroup.attrib['ID'])
-                        self.updateStateOnServer (dev, "bootseq", ZonePlayer.attrib['BootSeq'])
+                            self.updateStateOnServer(dev, "GROUP_Coordinator", 'false')
+                        self.updateStateOnServer(dev, "GROUP_Name", ZoneGroup.attrib['ID'])
+                        self.updateStateOnServer(dev, "bootseq", ZonePlayer.attrib['BootSeq'])
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -814,10 +827,10 @@ class Sonos(object):
     def updateZoneGroupStates(self, dev):
         try:
             zoneIP = dev.pluginProps["address"]
-            res = self.SOAPSend (zoneIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupAttributes", "")
-            self.updateStateOnServer (dev, "ZoneGroupName", self.parseCurrentZoneGroupName(res))
-            self.updateStateOnServer (dev, "ZoneGroupID", self.parseCurrentZoneGroupID(res))
-            self.updateStateOnServer (dev, "ZonePlayerUUIDsInGroup", self.parseCurrentZonePlayerUUIDsInGroup(res))
+            res = self.SOAPSend(zoneIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupAttributes", "")
+            self.updateStateOnServer(dev, "ZoneGroupName", self.parseCurrentZoneGroupName(res))
+            self.updateStateOnServer(dev, "ZoneGroupID", self.parseCurrentZoneGroupID(res))
+            self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", self.parseCurrentZonePlayerUUIDsInGroup(res))
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -827,7 +840,7 @@ class Sonos(object):
             for item in self.deviceList:
                 dev = indigo.devices[item]
                 if dev.states["GROUP_Coordinator"] == "true" and dev.states["ZP_STATE"] == "PLAYING":
-                    self.updateStateOnServer (dev, "ZP_RELATIVE", self.parseRelTime(dev, self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetPositionInfo", "")))
+                    self.updateStateOnServer(dev, "ZP_RELATIVE", self.parseRelTime(dev, self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetPositionInfo", "")))
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -891,7 +904,7 @@ class Sonos(object):
             else:
                 urn = "schemas-upnp-org"
 
-            self.logger.debug (f"zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
+            self.logger.debug(f"zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
 
             # SM_TEMPLATE = f"""<?xml version="1.0" encoding="utf-8"?><s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><ns0:{soapAction} xmlns:ns0=\"urn:{urn}:service:{soapBranch[1:]}:1\"><InstanceID>0</InstanceID>{soapPayload}</ns0:{soapAction}></s:Body></s:Envelope>"""
 
@@ -927,8 +940,6 @@ class Sonos(object):
             except Exception as exception_error:
                 self.logger.error(f"SOAPSend Error: {exception_error}")
 
-
-
             res_bytes = response.text.encode("utf-8")
             res = res_bytes.decode("utf-8")
             status = response.status_code
@@ -938,7 +949,7 @@ class Sonos(object):
                     self.logger.error(f"UPNP Error: {UPNP_ERRORS[errorCode]}")
                 except Exception as exception_error:
                     self.logger.error(f"UPNP Error: {status}")
-                self.logger.error (f"Offending Command -> zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
+                self.logger.error(f"Offending Command -> zoneIP: {zoneIP}, soapRoot: {soapRoot}, soapBranch: {soapBranch}, soapAction: {soapAction}")
                 self.logger.error(f"Error Response: {res}")  # TODO: Revert to Debug
 
             # reconstruct multi-line strings
@@ -946,12 +957,12 @@ class Sonos(object):
             resx = ""
 
             for line in res.splitlines():
-                ##f = open ('beta.txt')
-                ##for line in iter(f):
-                #self.logger.info (f"line: {line}")
+                # f = open ('beta.txt')
+                # for line in iter(f):
+                #     self.logger.info (f"line: {line}")
                 if len(line) <= 5:
                     try:
-                        if int(line, 16) >= 0 and int(line,16) <= 4096:
+                        if int(line, 16) >= 0 and int(line, 16) <= 4096:
                             pass
                         else:
                             resx = resx + line.rstrip('\n')
@@ -964,7 +975,7 @@ class Sonos(object):
                 self.logger.debug(SoapMessage)
                 self.logger.debug(resx)
 
-            return (resx)
+            return resx
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1208,7 +1219,7 @@ class Sonos(object):
             val = soco_event.variables["update_id"]
             if actionBusy == 0:
                 PlaylistName = "Indigo_" + str(dev.states['ZP_LocalUID'])
-                self.actionDirect (PA(dev.id, {"setting": PlaylistName}), "Q_Save")
+                self.actionDirect(PA(dev.id, {"setting": PlaylistName}), "Q_Save")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1317,7 +1328,7 @@ class Sonos(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def processArt (self, dev, val):
+    def processArt(self, dev, val):
         try:
             self.logger.debug(f"Processing Cover Art: {dev.name}:{val}")
             ZP_ZoneName = dev.states["ZP_ZoneName"]
@@ -1325,19 +1336,19 @@ class Sonos(object):
             if val is not None:
                 # Retrieve parent URI for slave zone
                 if uri_group in res:
-                    (ParentUID,x) = dev.states["ZoneGroupID"].split(':')
+                    (ParentUID, x) = dev.states["ZoneGroupID"].split(':')
                     for pdev in indigo.devices.iter("self.ZonePlayer"):
                         if ParentUID == pdev.states["ZP_LocalUID"]:
                             res = pdev.states["ZP_CurrentURI"]
                 prev_art = dev.states["ZP_ART"]
                 if uri_radio in res:
                     loc = str(res).find(uri_radio)
-                    if (loc >= 0):
+                    if loc >= 0:
                         loc_beg = loc + len(uri_radio)
                         loc_end = str(res).find("?sid", loc_beg)
                         loc_end = str(res).find("?sid", loc_beg)
-                        val = "http://d1i6vahw24eb07.cloudfront.net/"+self.restoreString(str(res)[loc_beg:loc_end],0)+"q.png"
-                        self.updateStateOnServer (dev, "ZP_ART", val)
+                        val = "http://d1i6vahw24eb07.cloudfront.net/"+self.restoreString(str(res)[loc_beg:loc_end], 0)+"q.png"
+                        self.updateStateOnServer(dev, "ZP_ART", val)
                         if val != prev_art:
                             reqObj = urllib.request.Request(val)
                             fileObj = urlopen(reqObj)
@@ -1350,7 +1361,7 @@ class Sonos(object):
                             val = "http://"+self.rootZPIP+":1400"+val
                         if val[0:4] != "http":
                             self.logger.warning(f"Artwork problem: val field does not start with 'http' = {val}")
-                    self.updateStateOnServer (dev, "ZP_ART", val)
+                    self.updateStateOnServer(dev, "ZP_ART", val)
                     if val != prev_art:
                         reqObj = urllib.request.Request(val)
                         fileObj = urlopen(reqObj)
@@ -1358,7 +1369,7 @@ class Sonos(object):
                         localFile.write(fileObj.read())
                         localFile.close()
                 elif uri_siriusxm in res:
-                    self.updateStateOnServer (dev, "ZP_ART", val)
+                    self.updateStateOnServer(dev, "ZP_ART", val)
                     if val != prev_art:
                         try:
                             reqObj = urllib.request.Request(val)
@@ -1370,37 +1381,41 @@ class Sonos(object):
                             shutil.copy2("sonos_art.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
 
             else:
-                self.updateStateOnServer (dev, "ZP_ART", "")
+                self.updateStateOnServer(dev, "ZP_ART", "")
                 if uri_tv in res:
-                    try: shutil.copy2("sonos_tv.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
-                    except Exception as exception_error:	pass
+                    try: 
+                        shutil.copy2("sonos_tv.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
+                    except Exception as exception_error:
+                        pass
                 else:
-                    try: shutil.copy2("sonos_art.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
-                    except Exception as exception_error: pass
+                    try: 
+                        shutil.copy2("sonos_art.jpg", "/Library/Application Support/Perceptive Automation/images/Sonos/"+ZP_ZoneName+"_art.jpg")
+                    except Exception as exception_error: 
+                        pass
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def parsePoint (self, res, startString, stopString):
+    def parsePoint(self, res, startString, stopString):
         try:
             loc = str(res).find(startString)
             if loc > 0:
                 loc_beg = loc + len(startString)
                 loc_end = str(res).find(stopString, loc_beg)
-                return (self.restoreString(str(res)[loc_beg:loc_end],0))
+                return self.restoreString(str(res)[loc_beg:loc_end], 0)
             else:
                 return ""
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def parseDirty (self, res, startString, stopString):
+    def parseDirty(self, res, startString, stopString):
         try:
             loc = str(res).find(startString)
             if loc > 0:
                 loc_beg = loc + len(startString)
                 loc_end = str(res).find(stopString, loc_beg)
-                return (str(res)[loc_beg:loc_end])
+                return str(res)[loc_beg:loc_end]
             else:
                 return ""
 
@@ -1413,7 +1428,7 @@ class Sonos(object):
             if loc > 0:
                 loc_beg = loc + len("<FirstTrackNumberEnqueued>")
                 loc_end = str(res).find("</FirstTrackNumberEnqueued>", loc_beg)
-                item = self.restoreString(str(res)[loc_beg:loc_end],0)
+                item = self.restoreString(str(res)[loc_beg:loc_end], 0)
                 return item
 
         except Exception as exception_error:
@@ -1421,85 +1436,85 @@ class Sonos(object):
 
     def parseRelTime(self, deviceId, res):
         try:
-            return self.parsePoint (res, "<RelTime>", "</RelTime>")
+            return self.parsePoint(res, "<RelTime>", "</RelTime>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentZoneGroupName(self, res):
         try:
-            return self.parsePoint (res, "<CurrentZoneGroupName>", "</CurrentZoneGroupName>")
+            return self.parsePoint(res, "<CurrentZoneGroupName>", "</CurrentZoneGroupName>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentZoneGroupID(self, res):
         try:
-            return self.parsePoint (res, "<CurrentZoneGroupID>", "</CurrentZoneGroupID>")
+            return self.parsePoint(res, "<CurrentZoneGroupID>", "</CurrentZoneGroupID>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentZonePlayerUUIDsInGroup(self, res):
         try:
-            return self.parsePoint (res, "<CurrentZonePlayerUUIDsInGroup>", "</CurrentZonePlayerUUIDsInGroup>")
+            return self.parsePoint(res, "<CurrentZonePlayerUUIDsInGroup>", "</CurrentZonePlayerUUIDsInGroup>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentVolume(self, res):
         try:
-            return self.parsePoint (res, "<CurrentVolume>", "</CurrentVolume>")
+            return self.parsePoint(res, "<CurrentVolume>", "</CurrentVolume>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentMute(self, res):
         try:
-            return self.parsePoint (res, "<CurrentMute>", "</CurrentMute>")
+            return self.parsePoint(res, "<CurrentMute>", "</CurrentMute>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseCurrentTransportActions(self, res):
         try:
-            return self.parsePoint (res, "<Actions>", "</Actions>")
+            return self.parsePoint(res, "<Actions>", "</Actions>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseErrorCode(self, res):
         try:
-            return self.parsePoint (res, "<errorCode>", "</errorCode>")
+            return self.parsePoint(res, "<errorCode>", "</errorCode>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseBrowseNumberReturned(self, res):
         try:
-            return self.parsePoint (res, "<NumberReturned>", "</NumberReturned>")
+            return self.parsePoint(res, "<NumberReturned>", "</NumberReturned>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parseAssignedObjectID(self, res):
         try:
-            return self.parsePoint (res, "<AssignedObjectID>", "</AssignedObjectID>")
+            return self.parsePoint(res, "<AssignedObjectID>", "</AssignedObjectID>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def parsePandoraToken(self, res):
         try:
-            return self.parsePoint (res, "&m=", "&f")
+            return self.parsePoint(res, "&m=", "&f")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def playRadio(self, zoneIP, l2p):
         try:
-            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"-1\" parentID=\"-1\" restricted=\"true\"&gt;&lt;dc:title&gt;RADIO&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"-1\" parentID=\"-1\" restricted=\"true\"&gt;&lt;dc:title&gt;RADIO&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1510,8 +1525,8 @@ class Sonos(object):
                 if pandora_station[0] == l2p:
                     pemail = pandora_station[2]
                     break
-            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>pndrradio:"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>pndrradio:"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation + "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -1530,17 +1545,17 @@ class Sonos(object):
     def QMode(self, repeat, repeat_one, shuffle):
         try:
             PlayMode = "NORMAL"  # Default
-            if repeat == False and repeat_one == False and shuffle == False:
+            if not repeat and not repeat_one and not shuffle:
                 PlayMode = "NORMAL"
-            elif repeat == True and shuffle == False:
+            elif repeat and not shuffle:
                 PlayMode = "REPEAT_ALL"
-            elif repeat_one == True and shuffle == False:
+            elif repeat_one and not shuffle:
                 PlayMode = "REPEAT_ONE"
-            elif repeat == False and repeat_one == False and shuffle == True:
+            elif not repeat and not repeat_one and shuffle:
                 PlayMode = "SHUFFLE_NOREPEAT"
-            elif repeat == True and shuffle == True:
+            elif repeat and shuffle:
                 PlayMode = "SHUFFLE"
-            elif repeat_one == True and shuffle == True:
+            elif repeat_one and shuffle:
                 PlayMode = "SHUFFLE_REPEAT_ONE"
             return PlayMode
 
@@ -1569,8 +1584,8 @@ class Sonos(object):
                     self.logger.info(f"remove zone from group: {item}")
                     dev = indigo.devices[int(item)]
                     if dev.states['GROUP_Coordinator'] == "true":
-                        self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
-                    self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev.states['ZP_LocalUID'])+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                        self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
+                    self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev.states['ZP_LocalUID'])+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
 
                 return
 
@@ -1600,7 +1615,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Play")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                         self.logger.info(f"ZonePlayer: {dev.name}, Play")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Play' not actioned as Zone IP cannot be resolved!")
@@ -1624,7 +1639,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Pause")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
                         self.logger.info(f"ZonePlayer: {dev.name}, Pause")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Pause' not actioned as Zone IP cannot be resolved!")
@@ -1634,7 +1649,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Stop")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Stop", "")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Stop", "")
                         self.logger.info(f"ZonePlayer: {dev.name}, Stop")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Stop' not actioned as Zone IP cannot be resolved!")
@@ -1644,7 +1659,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Previous")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Previous", "")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Previous", "")
                         self.logger.info(f"ZonePlayer: {dev.name}, Previous Track")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Previous Track' not actioned as Zone IP cannot be resolved!")
@@ -1654,7 +1669,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Next")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Next", "")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Next", "")
                         self.logger.info(f"ZonePlayer: {dev.name}, Next Track")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Next Track' not actioned as Zone IP cannot be resolved!")
@@ -1662,20 +1677,20 @@ class Sonos(object):
                 case "MuteToggle":
                     self.logger.debug("Sonos Action: Mute Toggle")
                     if int(dev.states["ZP_MUTE"]) == 0:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
                         self.logger.info(f"ZonePlayer: {dev.name}, Mute On")
                     else:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
                         self.logger.info(f"ZonePlayer: {dev.name}, Mute Off")
 
                 case "MuteOn":
                     self.logger.debug("Sonos Action: Mute On")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Mute On")
 
                 case "MuteOff":
                     self.logger.debug("Sonos Action: Mute Off")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Mute Off")
 
                 case "GroupMuteToggle":
@@ -1683,11 +1698,11 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Group Mute Toggle")
                     if zoneIP is not None:
-                        if int(self.parseCurrentMute (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))) == 0:
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
+                        if int(self.parseCurrentMute(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))) == 0:
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
                             self.logger.info(f"ZonePlayer Group: {dev.name}, Mute On")
                         else:
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
                             self.logger.info(f"ZonePlayer Group: {dev.name}, Mute Off")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Group Mute Toggle' not actioned as Zone IP cannot be resolved!")
@@ -1697,7 +1712,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Group Mute On")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
                         self.logger.info(f"ZonePlayer Group: {dev.name}, Mute On")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Group Mute On' not actioned as Zone IP cannot be resolved!")
@@ -1707,7 +1722,7 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     self.logger.debug("Sonos Action: Group Mute Off")
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
                         self.logger.info(f"ZonePlayer Group: {dev.name}, Mute Off")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Group Mute Off' not actioned as Zone IP cannot be resolved!")
@@ -1718,7 +1733,7 @@ class Sonos(object):
                     new_volume = int(eval(self.plugin.substitute(pluginAction.props.get("setting"))))
                     if new_volume < 0 or new_volume > 100:
                         new_volume = current_volume
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Volume: {current_volume}, New Volume: {new_volume}")
                 case "VolumeDown":
                     self.logger.debug("Sonos Action: Volume Down")
@@ -1726,7 +1741,7 @@ class Sonos(object):
                     new_volume = int(current_volume) - 2
                     if new_volume < 0:
                         new_volume = 0
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Volume: {current_volume}, New Volume: {new_volume}")
                 case "VolumeUp":
                     self.logger.debug("Sonos Action: Volume Up")
@@ -1734,50 +1749,50 @@ class Sonos(object):
                     new_volume = int(current_volume) + 2
                     if new_volume > 100:
                         new_volume = 100
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Volume: {current_volume}, New Volume: {new_volume}")
 
                 case "GroupVolume":
                     self.logger.debug("Sonos Action: Group Volume")
-                    current_volume = self.parseCurrentVolume (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                    current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                     new_volume = int(eval(self.plugin.substitute(pluginAction.props.get("setting"))))
                     if new_volume < 0 or new_volume > 100:
                         new_volume = current_volume
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupVolume", "<DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupVolume", "<DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
                     self.logger.info(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
                 case "RelativeGroupVolume":
                     self.logger.debug("Sonos Action: Relative Group Volume")
-                    current_volume = self.parseCurrentVolume (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                    current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                     adjustment = pluginAction.props.get("setting")
                     new_volume = int(current_volume) + int(adjustment)
                     if new_volume < 0:
                         new_volume = 0
                     if new_volume > 100:
                         new_volume = 100
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>"+adjustment+"</Adjustment>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>"+adjustment+"</Adjustment>")
                     self.logger.info(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
                 case "GroupVolumeDown":
                     self.logger.debug("Sonos Action: Group Volume Down")
-                    current_volume = self.parseCurrentVolume (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                    current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                     new_volume = int(current_volume) - 2
                     if new_volume < 0:
                         new_volume = 0
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>-2</Adjustment>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>-2</Adjustment>")
                     self.logger.info(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
                 case "GroupVolumeUp":
                     self.logger.debug("Sonos Action: Group Volume Up")
-                    current_volume = self.parseCurrentVolume (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                    current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                     new_volume = int(current_volume) + 2
                     if new_volume > 100:
                         new_volume = 100
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>2</Adjustment>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>2</Adjustment>")
                     self.logger.info(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
 
                 case "Bass":
                     self.logger.debug("Sonos Action: Bass")
                     current_bass = dev.states["ZP_BASS"]
                     new_bass = pluginAction.props.get("setting")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Bass: {current_bass}, New Bass: {new_bass}")
                 case "BassDown":
                     self.logger.debug("Sonos Action: Bass Down")
@@ -1785,7 +1800,7 @@ class Sonos(object):
                     new_bass = int(current_bass) - 1
                     if new_bass < -10:
                         new_bass = -10
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Bass: {current_bass}, New Bass: {new_bass}")
                 case "BassUp":
                     self.logger.debug("Sonos Action: Bass Up")
@@ -1793,14 +1808,14 @@ class Sonos(object):
                     new_bass = int(current_bass) + 1
                     if new_bass > 10:
                         new_bass = 10
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass", "<DesiredBass>"+str(new_bass)+"</DesiredBass>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Bass: {current_bass}, New Bass: {new_bass}")
 
                 case "Treble":
                     self.logger.debug("Sonos Action: Treble")
                     current_treble = dev.states["ZP_BASS"]
                     new_treble = pluginAction.props.get("setting")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Treble: {current_treble}, New Treble: {new_treble}")
                 case "TrebleDown":
                     self.logger.debug("Sonos Action: Treble Down")
@@ -1808,7 +1823,7 @@ class Sonos(object):
                     new_treble = int(current_treble) - 1
                     if new_treble < -10:
                         new_treble = -10
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Treble: {current_treble}, New Treble: {new_treble}")
                 case "TrebleUp":
                     self.logger.debug("Sonos Action: Treble Up")
@@ -1816,7 +1831,7 @@ class Sonos(object):
                     new_treble = int(current_treble) + 1
                     if new_treble > 10:
                         new_treble = 10
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble", "<DesiredTreble>"+str(new_treble)+"</DesiredTreble>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Current Treble: {current_treble}, New Treble: {new_treble}")
 
                 case "NightMode":
@@ -1832,9 +1847,9 @@ class Sonos(object):
                     if zoneIP is not None:
                         mode = pluginAction.props.get("setting")
                         if mode == 0:
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>0</CrossfadeMode>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>0</CrossfadeMode>")
                         elif mode == 1:
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>1</CrossfadeMode>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>1</CrossfadeMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Crossfade' not actioned as Zone IP cannot be resolved!")
 
@@ -1845,12 +1860,12 @@ class Sonos(object):
                         repeat = bool(int(pluginAction.props.get("setting")))
                         repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
                         shuffle = self.boolConv(dev.states["Q_Shuffle"])
-                        if repeat == True:
+                        if repeat:
                             PlayMode = self.QMode(repeat, False, shuffle)
                         else:
                             PlayMode = self.QMode(repeat, repeat_one, shuffle)
                         self.logger.debug(f"Sonos Action: PlayMode {PlayMode}")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Repeat' not actioned as Zone IP cannot be resolved!")
 
@@ -1861,12 +1876,12 @@ class Sonos(object):
                         repeat_one = bool(int(pluginAction.props.get("setting")))
                         repeat = self.boolConv(dev.states["Q_Repeat"])
                         shuffle = self.boolConv(dev.states["Q_Shuffle"])
-                        if repeat_one == True:
+                        if repeat_one:
                             PlayMode = self.QMode(False, repeat_one, shuffle)
                         else:
                             PlayMode = self.QMode(repeat, repeat_one, shuffle)
                         self.logger.debug(f"Sonos Action: PlayMode {PlayMode}")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Repeat One' not actioned as Zone IP cannot be resolved!")
 
@@ -1877,14 +1892,14 @@ class Sonos(object):
                         repeat = self.boolConv(dev.states["Q_Repeat"])
                         repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
                         shuffle = self.boolConv(dev.states["Q_Shuffle"])
-                        if repeat == False and repeat_one == False:
+                        if not repeat and not repeat_one:
                             PlayMode = self.QMode(True, False, shuffle)
-                        elif repeat == True and repeat_one == False:
+                        elif repeat and not repeat_one:
                             PlayMode = self.QMode(False, True, shuffle)
                         else:
                             PlayMode = self.QMode(False, False, shuffle)
                         self.logger.debug(f"Sonos Action: PlayMode {PlayMode}")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Repeat Toggle' not actioned as Zone IP cannot be resolved!")
 
@@ -1897,7 +1912,7 @@ class Sonos(object):
                         repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
                         PlayMode = self.QMode(repeat, repeat_one, shuffle)
                         self.logger.debug(f"Sonos Action: PlayMode {PlayMode}")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Shuffle' not actioned as Zone IP cannot be resolved!")
 
@@ -1908,17 +1923,17 @@ class Sonos(object):
                         repeat = self.boolConv(dev.states["Q_Repeat"])
                         repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
                         shuffle = self.boolConv(dev.states["Q_Shuffle"])
-                        if shuffle == True:
+                        if shuffle:
                             PlayMode = self.QMode(repeat, repeat_one, False)
                         else:
                             PlayMode = self.QMode(repeat, repeat_one, True)
                         self.logger.debug(f"Sonos Action: PlayMode {PlayMode}")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Queue Shuffle Toggle' not actioned as Zone IP cannot be resolved!")
 
                 case "Q_Clear":
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/Queue", "RemoveAllTracks", "<QueueID>0</QueueID><UpdateID>0</UpdateID>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/Queue", "RemoveAllTracks", "<QueueID>0</QueueID><UpdateID>0</UpdateID>")
                     self.logger.info(f"ZonePlayer: {dev.name}, Clear Queue")
 
                 case "Q_Save":
@@ -1929,7 +1944,7 @@ class Sonos(object):
                         self.plugin.sleep(0.5)
                         PlaylistName = pluginAction.props.get("setting")
 
-                        ZP  = self.parseBrowseNumberReturned(self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
+                        ZP  = self.parseBrowseNumberReturned(self.SOAPSend(zoneIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
 
                         try:
                             int(ZP)
@@ -1944,30 +1959,30 @@ class Sonos(object):
                             for plist in Sonos_Playlists:
                                 if plist[1] == PlaylistName:
                                     ObjectID = plist[2]
-                            AssignedObjectID = self.parseAssignedObjectID(self.SOAPSend (zoneIP, "/MediaRenderer", "/Queue", "SaveAsSonosPlaylist", "<QueueID>0</QueueID><Title>" + PlaylistName + "</Title><ObjectID>" + ObjectID + "</ObjectID>"))
+                            AssignedObjectID = self.parseAssignedObjectID(self.SOAPSend(zoneIP, "/MediaRenderer", "/Queue", "SaveAsSonosPlaylist", "<QueueID>0</QueueID><Title>" + PlaylistName + "</Title><ObjectID>" + ObjectID + "</ObjectID>"))
                             if ObjectID == "":
                                 ObjectID = AssignedObjectID
                             if PlaylistName.find(dev.states['ZP_LocalUID']) > -1:
-                                self.updateStateOnServer (dev, "Q_ObjectID", ObjectID)
+                                self.updateStateOnServer(dev, "Q_ObjectID", ObjectID)
 
-                            self.logger.debug (f"ZonePlayer: {dev.name}, Save Queue: {PlaylistName}")
+                            self.logger.debug(f"ZonePlayer: {dev.name}, Save Queue: {PlaylistName}")
                         else:
                             if PlaylistName == "Indigo_" + dev.states['ZP_LocalUID']:
                                 ObjectID = ""
                                 for plist in Sonos_Playlists:
                                     if plist[1] == PlaylistName:
                                         ObjectID = plist[2]
-                                        self.actionDirect(PA(dev.id, {"setting":ObjectID}), "CD_RemovePlaylist")
-                                self.updateStateOnServer (dev, "Q_ObjectID", "")
-                            self.logger.debug (f"ZonePlayer: {dev.name}, Nothing in Queue to Save")
+                                        self.actionDirect(PA(dev.id, {"setting": ObjectID}), "CD_RemovePlaylist")
+                                self.updateStateOnServer(dev, "Q_ObjectID", "")
+                            self.logger.debug(f"ZonePlayer: {dev.name}, Nothing in Queue to Save")
 
                 case "CD_RemovePlaylist":
                     ObjectID = pluginAction.props.get("setting")
                     for plist in Sonos_Playlists:
                         if plist[2] == ObjectID:
                             PlaylistName = plist[1]
-                            self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "DestroyObject", "<ObjectID>" + ObjectID + "</ObjectID>")
-                            self.logger.info (f"ZonePlayer: {dev.name}, Remove Playlist: {PlaylistName}")
+                            self.SOAPSend(zoneIP, "/MediaServer", "/ContentDirectory", "DestroyObject", "<ObjectID>" + ObjectID + "</ObjectID>")
+                            self.logger.info(f"ZonePlayer: {dev.name}, Remove Playlist: {PlaylistName}")
 
                 case "ChannelUp":
                     if dev.states["GROUP_Coordinator"] == "false":
@@ -1993,9 +2008,9 @@ class Sonos(object):
                                 else:
                                     x = x - 1
                             l2p = Sonos_RT_FavStations[x][0].replace("&", "&amp;")
-                            self.playRadio (zoneIP, l2p)
+                            self.playRadio(zoneIP, l2p)
                         elif uri_pandora in currentURI:
-                            Sonos_Pandora_Sort = sorted(Sonos_Pandora, key=lambda a:a[1])
+                            Sonos_Pandora_Sort = sorted(Sonos_Pandora, key=lambda a: a[1])
                             self.logger.info(f"{Sonos_Pandora_Sort}")
                             for l2p in Sonos_Pandora_Sort:
                                 if currentURI[10:] == l2p[0]:
@@ -2012,21 +2027,21 @@ class Sonos(object):
                                     x = x - 1
                             l2p = Sonos_Pandora_Sort[x][0]
                             pstation = self.cleanString(Sonos_Pandora_Sort[x][1])
-                            self.playPandora (zoneIP, l2p, pstation)
+                            self.playPandora(zoneIP, l2p, pstation)
                         elif uri_siriusxm in currentURI:
-                            #setting = currentURI[currentURI.find("%3a")+3:currentURI.find("?")]
+                            # setting = currentURI[currentURI.find("%3a")+3:currentURI.find("?")]
                             setting = urllib.parse.unquote(currentURI[currentURI.find(":")+1:currentURI.find("?")])
                             for Channel in range(len(Sonos_SiriusXM)):
-                                #if Sonos_SiriusXM[Channel][3] == setting:
+                                # if Sonos_SiriusXM[Channel][3] == setting:
                                 if Sonos_SiriusXM[Channel][1] == setting:
                                     if Channel + 1 < len(Sonos_SiriusXM):
-                                        #new_setting = Sonos_SiriusXM[Channel+1][3]
+                                        # new_setting = Sonos_SiriusXM[Channel+1][3]
                                         new_setting = Sonos_SiriusXM[Channel+1][1]
                                     else:
-                                        #new_setting = Sonos_SiriusXM[0][3]
+                                        # new_setting = Sonos_SiriusXM[0][3]
                                         new_setting = Sonos_SiriusXM[0][1]
                                     break
-                            self.actionDirect (PA(dev.id, {"setting":new_setting}), "ZP_SiriusXM")
+                            self.actionDirect(PA(dev.id, {"setting": new_setting}), "ZP_SiriusXM")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Channel Up' not actioned as Zone IP cannot be resolved!")
 
@@ -2054,9 +2069,9 @@ class Sonos(object):
                                 else:
                                     x = x + 1
                             l2p = Sonos_RT_FavStations[x][0].replace("&", "&amp;")
-                            self.playRadio (zoneIP, l2p)
+                            self.playRadio(zoneIP, l2p)
                         elif uri_pandora in currentURI:
-                            Sonos_Pandora_Sort = sorted(Sonos_Pandora, key=lambda a:a[1])
+                            Sonos_Pandora_Sort = sorted(Sonos_Pandora, key=lambda a: a[1])
                             self.logger.info(f"{Sonos_Pandora_Sort}")
                             for l2p in Sonos_Pandora_Sort:
                                 if currentURI[10:] == l2p[0]:
@@ -2073,21 +2088,21 @@ class Sonos(object):
                                     x = x + 1
                             l2p = Sonos_Pandora_Sort[x][0]
                             pstation = self.cleanString(Sonos_Pandora_Sort[x][1])
-                            self.playPandora (zoneIP, l2p, pstation)
+                            self.playPandora(zoneIP, l2p, pstation)
                         elif uri_siriusxm in currentURI:
-                            #setting = currentURI[currentURI.find("%3a")+3:currentURI.find("?")]
+                            # setting = currentURI[currentURI.find("%3a")+3:currentURI.find("?")]
                             setting = urllib.parse.unquote(currentURI[currentURI.find(":")+1:currentURI.find("?")])
                             for Channel in range(len(Sonos_SiriusXM)):
-                                #if Sonos_SiriusXM[Channel][3] == setting:
+                                # if Sonos_SiriusXM[Channel][3] == setting:
                                 if Sonos_SiriusXM[Channel][1] == setting:
                                     if Channel > 0:
-                                        #new_setting = Sonos_SiriusXM[Channel-1][3]
+                                        # new_setting = Sonos_SiriusXM[Channel-1][3]
                                         new_setting = Sonos_SiriusXM[Channel-1][1]
                                     else:
-                                        #new_setting = Sonos_SiriusXM[len(Sonos_SiriusXM)-1][3]
+                                        # new_setting = Sonos_SiriusXM[len(Sonos_SiriusXM)-1][3]
                                         new_setting = Sonos_SiriusXM[len(Sonos_SiriusXM)-1][1]
                                     break
-                            self.actionDirect (PA(dev.id, {"setting":new_setting}), "ZP_SiriusXM")
+                            self.actionDirect(PA(dev.id, {"setting": new_setting}), "ZP_SiriusXM")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'Channel Down' not actioned as Zone IP cannot be resolved!")
 
@@ -2100,8 +2115,8 @@ class Sonos(object):
                         dev_src_LocalUID = dev_src.states['ZP_LocalUID']
                         if dev_src.states["ZP_AIName"] != "":
                             self.logger.debug("Sonos Action: Line-In")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-stream:"+str(dev_src_LocalUID)+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-stream:"+str(dev_src_LocalUID)+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Line In' not actioned as Zone IP cannot be resolved!")
 
@@ -2110,8 +2125,8 @@ class Sonos(object):
                         zoneIP = CoordinatorIP
                     if zoneIP is not None:
                         l2p = pluginAction.props.get("setting").replace("&", "&amp;")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"-1\" parentID=\"-1\" restricted=\"true\"&gt;&lt;dc:title&gt;RADIO&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"-1\" parentID=\"-1\" restricted=\"true\"&gt;&lt;dc:title&gt;RADIO&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP RT FavStation' not actioned as Zone IP cannot be resolved!")
 
@@ -2132,24 +2147,24 @@ class Sonos(object):
                                 plist_name = plist[1]
                         # self.logger.info(f"Queueing Playlist: {mode}: {plist_name}...")
                         if mode == "Play Now":
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                         elif mode == "Play Next":
-                            #current_track = self.parseCurrentTrack(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
+                            # current_track = self.parseCurrentTrack(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
                             current_track = dev.states['ZP_CurrentTrack']
                             self.logger.info(current_track)
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>"+str(int(current_track)+1)+"</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>"+str(int(current_track)+1)+"</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
                         elif mode == "Add To Queue":
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
                         elif mode == "Replace Queue":
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "RemoveAllTracksFromQueue", "")
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
-                        self.logger.info (f"ZonePlayer: {dev.name}, Play Sonos Playlist: {plist_name}")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "RemoveAllTracksFromQueue", "")
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.logger.info(f"ZonePlayer: {dev.name}, Play Sonos Playlist: {plist_name}")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP List' not actioned as Zone IP cannot be resolved!")
 
@@ -2160,20 +2175,20 @@ class Sonos(object):
                     else:
                         dev_src_LocalUID = dev.states['ZP_LocalUID']
                     if zoneIP is not None:
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Queue' not actioned as Zone IP cannot be resolved!")
 
                 case "addPlayerToZone":
                     dev_dest = indigo.devices[int(pluginAction.props.get("setting"))]
-                    #self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev_dest.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                    self.SOAPSend (dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    # self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev_dest.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    self.SOAPSend(dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                 case "setStandalone":
                     self.logger.info(f"remove zone from group: {dev.name}")
                     if dev.states['GROUP_Coordinator'] == "true":
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev.states['ZP_LocalUID'])+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev.states['ZP_LocalUID'])+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                 case "addPlayersToZone":
                     zones = []
                     x = 1
@@ -2186,15 +2201,14 @@ class Sonos(object):
                     for item in zones:
                         self.logger.info(f"add zone to group: {item}")
                         dev_dest = indigo.devices[int(item)]
-                        self.SOAPSend (dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-
+                        self.SOAPSend(dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
 
                 case "ZP_sleepTimer":
                     if dev.states["GROUP_Coordinator"] == "false":
                         zoneIP = CoordinatorIP
                     if zoneIP is not None:
                         l2p = pluginAction.props.get("setting")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "ConfigureSleepTimer", "<NewSleepTimerDuration>" + l2p + "</NewSleepTimerDuration>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "ConfigureSleepTimer", "<NewSleepTimerDuration>" + l2p + "</NewSleepTimerDuration>")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Sleep Timer' not actioned as Zone IP cannot be resolved!")
 
@@ -2209,10 +2223,10 @@ class Sonos(object):
                                 pemail = pandora_station[2]
                                 pnickname = pandora_station[3]
                                 break
-                        #self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>pndrradio:"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-radio:ST%3a"+l2p+"?sid=236&amp;flags=8300&amp;sn=10</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
-                        self.logger.info (f"ZonePlayer: {dev.name}, Play Pandora: {pnickname}: {pstation}")
+                        # self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>pndrradio:"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-radio:ST%3a"+l2p+"?sid=236&amp;flags=8300&amp;sn=10</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"OOOX" + l2p + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + pstation + "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON3_" + pemail + "&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.logger.info(f"ZonePlayer: {dev.name}, Play Pandora: {pnickname}: {pstation}")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Pandora' not actioned as Zone IP cannot be resolved!")
 
@@ -2223,16 +2237,16 @@ class Sonos(object):
                         contentId = pluginAction.props.get("setting")
 
                         for Channel in Sonos_SiriusXM:
-                            #if Channel[3] == contentId:
+                            # if Channel[3] == contentId:
                             if Channel[1] == contentId:
-                                #siriusChannelNo = Channel[0]
-                                #name = self.cleanString(Channel[4]).encode('ascii', 'xmlcharrefreplace')
+                                # siriusChannelNo = Channel[0]
+                                # name = self.cleanString(Channel[4]).encode('ascii', 'xmlcharrefreplace')
                                 title = Channel[2]
                                 break
-                        #self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:r%3a" + contentId + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + str(siriusChannelNo) + " - " + name +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:" + urllib.parse.quote(contentId) + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + title +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
-                        self.logger.info (f"ZonePlayer: {dev.name}, Play SiriusXM: {title}")
+                        # self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:r%3a" + contentId + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + str(siriusChannelNo) + " - " + name +  "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonosapi-hls:" + urllib.parse.quote(contentId) + "?sid=37&amp;flags=8480&amp;sn=8</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"" + contentId + "\" parentID=\"0\" restricted=\"true\"&gt;&lt;dc:title&gt;" + title + "&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.logger.info(f"ZonePlayer: {dev.name}, Play SiriusXM: {title}")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP SiriusXM' not actioned as Zone IP cannot be resolved!")
 
@@ -2257,7 +2271,7 @@ class Sonos(object):
                     if zoneIP is not None:
                         l2p = pluginAction.props.get("setting")
                         mode = pluginAction.props.get("mode")
-                        #(uri_header, uri_detail) = l2p.split(':')
+                        # (uri_header, uri_detail) = l2p.split(':')
                         for title in Sonos_Favorites:
                             if title[0] == l2p:
                                 pTitle = self.cleanString(title[1]).encode('ascii', 'xmlcharrefreplace')
@@ -2268,24 +2282,24 @@ class Sonos(object):
                         l2p = l2p.replace("&", "&amp;")
 
                         if mode == "Play Now":
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                         elif mode == "Play Next":
-                            #current_track = self.parseCurrentTrack(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
+                            # current_track = self.parseCurrentTrack(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
                             current_track = dev.states['ZP_CurrentTrack']
                             self.logger.info(current_track)
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>"+str(int(current_track)+1)+"</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>"+str(int(current_track)+1)+"</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
                         elif mode == "Add To Queue":
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
                         elif mode == "Replace Queue":
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "RemoveAllTracksFromQueue", "")
-                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
-                        self.logger.info (f"ZonePlayer: {dev.name}, Play: {pTitle}")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "RemoveAllTracksFromQueue", "")
+                            track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.logger.info(f"ZonePlayer: {dev.name}, Play: {pTitle}")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Container' not actioned as Zone IP cannot be resolved!")
 
@@ -2300,46 +2314,46 @@ class Sonos(object):
                                 URI = title[3]
                                 MD = title[2]
                                 break
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+URI+"</CurrentURI><CurrentURIMetaData>"+MD+"</CurrentURIMetaData>")
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
-                        self.logger.info (f"ZonePlayer: {dev.name}, Play Radio: {pTitle}")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+URI+"</CurrentURI><CurrentURIMetaData>"+MD+"</CurrentURIMetaData>")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                        self.logger.info(f"ZonePlayer: {dev.name}, Play Radio: {pTitle}")
                     else:
                         self.logger.warning(f"ZonePlayer: {dev.name}, 'ZP Sonos Radio' not actioned as Zone IP cannot be resolved!")
 
                 case "ZP_TV":
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonos-htastream:"+str(dev.states['ZP_LocalUID'])+":spdif</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"spdif-input\" parentID=\"0\" restricted=\"false\"&gt;&lt;dc:title&gt;"+str(dev.states['ZP_LocalUID'])+"&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioItem&lt;/upnp:class&gt;&lt;res protocolInfo=\"spdif\"&gt;x-sonos-htastream:"+str(dev.states['ZP_LocalUID'])+":spdif&lt;/res&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-sonos-htastream:"+str(dev.states['ZP_LocalUID'])+":spdif</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"spdif-input\" parentID=\"0\" restricted=\"false\"&gt;&lt;dc:title&gt;"+str(dev.states['ZP_LocalUID'])+"&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioItem&lt;/upnp:class&gt;&lt;res protocolInfo=\"spdif\"&gt;x-sonos-htastream:"+str(dev.states['ZP_LocalUID'])+":spdif&lt;/res&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
 
                 case "ZP_SonosFavorites":
                     setting = pluginAction.props.get("setting")
                     for uri in Sonos_Favorites:
                         if uri[4] == setting:
-                            l2p=uri[0]
+                            l2p = uri[0]
                             break
                     mode = pluginAction.props.get("mode")
                     if mode == "":
                         mode = "Play Now"
 
                     if uri_radio in l2p:
-                        self.actionDirect (PA(dev.id, {"setting":l2p}), "ZP_RT_FavStation")
+                        self.actionDirect(PA(dev.id, {"setting": l2p}), "ZP_RT_FavStation")
                     elif uri_pandora in l2p:
                         setting = l2p[l2p.find(":")+1:l2p.find("?")]
-                        self.actionDirect (PA(dev.id, {"setting":setting}), "ZP_Pandora")
+                        self.actionDirect(PA(dev.id, {"setting": setting}), "ZP_Pandora")
                     elif uri_siriusxm in l2p:
-                        #setting = l2p[l2p.find("%3a")+3:l2p.find("?")]
+                        # setting = l2p[l2p.find("%3a")+3:l2p.find("?")]
                         setting = urllib.parse.unquote(l2p[l2p.find(":")+1:l2p.find("?")])
-                        self.actionDirect (PA(dev.id, {"setting":setting}), "ZP_SiriusXM")
+                        self.actionDirect(PA(dev.id, {"setting": setting}), "ZP_SiriusXM")
                     elif uri_spotify in l2p:
-                        self.actionDirect (PA(dev.id, {"setting":l2p, "mode":mode}), "ZP_Container")
+                        self.actionDirect(PA(dev.id, {"setting": l2p, "mode": mode}), "ZP_Container")
                     elif uri_container in l2p or uri_jffs in l2p or uri_playlist in l2p or uri_file in l2p:
-                        self.actionDirect (PA(dev.id, {"setting":l2p, "mode":mode}), "ZP_Container")
+                        self.actionDirect(PA(dev.id, {"setting": l2p, "mode": mode}), "ZP_Container")
                     elif uri_sonos_radio in l2p:
-                        self.actionDirect (PA(dev.id, {"setting":l2p}), "ZP_SonosRadio")
+                        self.actionDirect(PA(dev.id, {"setting": l2p}), "ZP_SonosRadio")
                     else:
-                        self.logger.info (f"I do not know what to do with Favorite: {l2p}")
+                        self.logger.info(f"I do not know what to do with Favorite: {l2p}")
 
                 case "ZP_DumpURI":
-                    MediaInfo = self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetMediaInfo", "")
-                    PositionInfo = self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", "")
+                    MediaInfo = self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "GetMediaInfo", "")
+                    PositionInfo = self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", "")
                     self.logSep(0)
                     self.logger.info(f"ZonePlayer: {zoneIP}, {dev.name}")
                     self.logger.info(f"MediaInfo: {MediaInfo}")
@@ -2392,7 +2406,7 @@ class Sonos(object):
                     partist = thumb_status['artistName']
                     ptrack = thumb_status['songName']
                     if action == "thumbs_down":
-                        self.actionDirect (PA(dev.id), "Next")
+                        self.actionDirect(PA(dev.id), "Next")
 
                     self.logger.info(f"[{time.asctime()}] {thumbAction} for station: {PandoraStation}, artist: {partist}, track: {ptrack} on ZonePlayer: {dev.name}")
                 except Exception as exception_error:
@@ -2411,10 +2425,10 @@ class Sonos(object):
                 SavedState = []
                 for dev in indigo.devices.iter("self.ZonePlayer"):
                     if dev.enabled and dev.pluginProps["model"] != SONOS_SUB:
-                        # ZP  = self.parseBrowseNumberReturned(self.SOAPSend (dev.pluginProps["address"], "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
+                        # ZP  = self.parseBrowseNumberReturned(self.SOAPSend(dev.pluginProps["address"], "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
                         ZP = ""
-                        ZP_CurrentURIMetaData = self.parseDirty(self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetMediaInfo", ""), "<CurrentURIMetaData>", "</CurrentURIMetaData>")
-                        rel_time = self.parseRelTime(dev, self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
+                        ZP_CurrentURIMetaData = self.parseDirty(self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetMediaInfo", ""), "<CurrentURIMetaData>", "</CurrentURIMetaData>")
+                        rel_time = self.parseRelTime(dev, self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
                         SavedState.append((dev.states['ZP_LocalUID'], dev.states['Q_Crossfade'], dev.states['Q_Repeat'], dev.states['Q_Shuffle'], dev.states['ZP_MUTE'], dev.states['ZP_STATE'], dev.states['ZP_VOLUME'], dev.states['ZP_CurrentURI'], ZP_CurrentURIMetaData, dev.states['ZP_CurrentTrack'], dev.states['GROUP_Coordinator'], ZP, rel_time, dev.states['ZonePlayerUUIDsInGroup']))
             elif action == "restoreStates":
                 pass
@@ -2448,7 +2462,7 @@ class Sonos(object):
                 gc_only = False
 
             AnnouncementZones = []
-            if gc_only == False:
+            if not gc_only:
                 x = 1
                 while x <= 12:
                     ivar = 'zp' + str(x)
@@ -2477,7 +2491,7 @@ class Sonos(object):
                 dev_src_LocalUID = dev_src.states['ZP_LocalUID']
 
                 if dev_src.states['ZP_AIName'] == "":
-                    self.logger.info ("No Line-In Available...")
+                    self.logger.info("No Line-In Available...")
                     actionBusy = 0
                     return
 
@@ -2488,16 +2502,16 @@ class Sonos(object):
                     # if member of group, remove from group
                     # no action necessary since uri will change to line-in
                     if dev.states['GROUP_Coordinator'] == "false":
-                        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
+                        self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "BecomeCoordinatorOfStandaloneGroup", "")
                     # change input to line-in
                     self.logger.debug(f"Playing LineIn: {dev_src.states['ZP_AIName']}...")
                     self.logger.debug("Sonos Action: Line-In")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-stream:"+str(dev_src_LocalUID)+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-stream:"+str(dev_src_LocalUID)+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                     # set announcment volume
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(zp_volume)+"</DesiredVolume>")
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(zp_volume)+"</DesiredVolume>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                     # un-mute ZonePlayer
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
 
                 # make announcement
                 self.logger.debug("Making Announcement...")
@@ -2572,8 +2586,8 @@ class Sonos(object):
                     statinfo = self.MicrosoftTranslate(announcement, language)
                     s_announcement = "announcement.mp3"
                     tts_delay = 0.5
-                    if statinfo == False:
-                        self.logger.error ("Microsoft Translate Error")
+                    if not statinfo:
+                        self.logger.error("Microsoft Translate Error")
                         return
 
                 else:
@@ -2582,48 +2596,47 @@ class Sonos(object):
                     s_announcement = "announcement.mp3"
                     tts_delay = 0
 
-
                 self.logger.info(f"Announcement: {announcement}, Volume: {zp_volume}")
 
                 GM = indigo.devices[int(AnnouncementZones[0])]
                 zoneIP = GM.pluginProps["address"]
 
-                if gc_only == True:
-                    group_volume = self.parseCurrentVolume (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
-                    group_mute = self.parseCurrentMute (self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))
+                if gc_only:
+                    group_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                    group_mute = self.parseCurrentMute(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))
 
-                if gc_only == False:
+                if not gc_only:
                     # set standalone
-                    self.logger.debug ("Announcement: set standalone")
+                    self.logger.debug("Announcement: set standalone")
                     for item in AnnouncementZones:
                         dev = indigo.devices[int(item)]
-                        self.actionDirect (PA(dev.id), "setStandalone")
+                        self.actionDirect(PA(dev.id), "setStandalone")
                     # add announcement zones to group
-                    self.logger.debug ("Announcement: add announcement zones to group")
+                    self.logger.debug("Announcement: add announcement zones to group")
                     itemcount = 0
                     for item in AnnouncementZones:
                         dev = indigo.devices[int(item)]
                         if itemcount > 0:
-                            self.actionDirect (PA(GM.id, {'setting':dev.id}), "addPlayerToZone")
+                            self.actionDirect(PA(GM.id, {'setting': dev.id}), "addPlayerToZone")
                         itemcount = itemcount + 1
                 else:
                     self.actionDirect(PA(GM.id), "Stop")
 
                 # set volume
-                self.logger.debug ("Announcement: set volume")
-                if gc_only == False:
+                self.logger.debug("Announcement: set volume")
+                if not gc_only:
                     for item in AnnouncementZones:
                         dev = indigo.devices[int(item)]
-                        self.actionDirect (PA(dev.id, {'setting':zp_volume}), "Volume")
+                        self.actionDirect(PA(dev.id, {'setting': zp_volume}), "Volume")
                 else:
-                    self.actionDirect (PA(GM.id, {'setting':zp_volume}), "GroupVolume")
-                    self.actionDirect (PA(GM.id), "GroupMuteOff")
+                    self.actionDirect(PA(GM.id, {'setting': zp_volume}), "GroupVolume")
+                    self.actionDirect(PA(GM.id), "GroupMuteOff")
 
                 count = 0
                 success = 0
                 while count < 5 and success == 0:
                     try:
-                        if "mp3" in  s_announcement:
+                        if "mp3" in s_announcement:
                             audio = MP3("./" + s_announcement)
                         elif "aiff" in s_announcement:
                             audio = AIFF("./" + s_announcement)
@@ -2644,21 +2657,22 @@ class Sonos(object):
                         # turn off queue repeat
                         self.actionDirect(PA(GM.id, {'setting': 0}), "Q_Repeat")
 
-                        self.plugin.sleep(0.3)
+                        self.plugin.sleep(0.5)
 
                         self.actionDirect(PA(GM.id), "Play")
                         self.plugin.sleep(chime.info.length)
+                        self.plugin.sleep(0.2)
 
                     self.logger.info(f"Announcement Length: {audio.info.length}")
 
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>http://" + self.HTTPServer + ":" + self.HTTPStreamingPort + "/" + s_announcement + "</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>http://" + self.HTTPServer + ":" + self.HTTPStreamingPort + "/" + s_announcement + "</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
 
                     # turn off queue repeat
-                    self.actionDirect (PA(GM.id, {'setting': 0}), "Q_Repeat")
+                    self.actionDirect(PA(GM.id, {'setting': 0}), "Q_Repeat")
 
                     self.plugin.sleep(1)
 
-                    self.actionDirect (PA(GM.id), "Play")
+                    self.actionDirect(PA(GM.id), "Play")
                     self.plugin.sleep(tts_delay + audio.info.length)
                 else:
                     self.logger.error("Unable to read MP3 file.  Announcement aborted.")
@@ -2668,8 +2682,8 @@ class Sonos(object):
             updatedURI = {}
             for item in AnnouncementZones:
                 dev = indigo.devices[int(item)]
-                if gc_only == False:
-                    self.actionDirect (PA(dev.id), "setStandalone")
+                if not gc_only:
+                    self.actionDirect(PA(dev.id), "setStandalone")
                 updatedURI[dev.id] = 0
                 self.plugin.sleep(.5)
 
@@ -2693,23 +2707,23 @@ class Sonos(object):
                         self.logger.debug(f"12:Relative Time:          {state[12]}")
                         self.logger.debug(f"13:ZonePlayerUUIDsInGroup: {state[13]}")
 
-                        if gc_only == False:
+                        if not gc_only:
                             # restore group membership
                             if state[10] == "true":
                                 self.logger.debug(f"{state[0]}: Restore URI: {state[7]}")
 
                                 # Restore Queue from Saved Playlist
                                 if int(dev.states['Q_Number']) == 0:
-                                    self.actionDirect (PA(dev.id), "Q_Clear")
+                                    self.actionDirect(PA(dev.id), "Q_Clear")
                                 else:
                                     for plist in Sonos_Playlists:
                                         if dev.states['Q_ObjectID'] == plist[2]:
                                             l2p = plist[0]
-                                    self.actionDirect (PA(dev.id), "Q_Clear")
-                                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>")
+                                    self.actionDirect(PA(dev.id), "Q_Clear")
+                                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData></EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>")
 
                                 SendVar = "<CurrentURI>" + state[7].replace("&", "&amp;") + "</CurrentURI><CurrentURIMetaData>" + state[8] + "</CurrentURIMetaData>"
-                                # self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
+                                # self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
                                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar)
                                 updatedURI[dev.id] = 1
 
@@ -2719,28 +2733,28 @@ class Sonos(object):
                                         for rdev in indigo.devices.iter("self.ZonePlayer"):
                                             if ZonePlayerUUID == rdev.states['ZP_LocalUID']:
                                                 self.logger.info(f"add zone to group: {rdev.name}->{dev.name}")
-                                                self.SOAPSend (rdev.pluginProps['address'], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(state[0])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                                                self.SOAPSend(rdev.pluginProps['address'], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(state[0])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                                                 updatedURI[rdev.id] = 1
                                                 self.plugin.sleep(.5)
 
                             # restore mute
                             self.logger.debug(f"{state[0]}: Restore Mute: {state[4]}")
-                            if (state[4] == "0"):
-                                self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                            if state[4] == "0":
+                                self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
                             else:
-                                self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
+                                self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
                             # restore volume
                             self.logger.debug(f"{state[0]}: Restore Volume: {state[6]}")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+state[6]+"</DesiredVolume>")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+state[6]+"</DesiredVolume>")
                         else:
-                            self.actionDirect (PA(dev.id, {'setting': group_volume}), "GroupVolume")
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>" + group_mute + "</DesiredMute>")
+                            self.actionDirect(PA(dev.id, {'setting': group_volume}), "GroupVolume")
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>" + group_mute + "</DesiredMute>")
 
                         # resture uri
                         if updatedURI[dev.id] == 0:
                             self.logger.debug(f"{state[0]}: Restore URI: {state[7]}")
                             SendVar = "<CurrentURI>" + state[7].replace("&", "&amp;") + "</CurrentURI><CurrentURIMetaData>" + state[8] + "</CurrentURIMetaData>"
-                            self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
+                            self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", SendVar.encode('utf-8'))
                             updatedURI[dev.id] = 1
 
             self.plugin.sleep(1)
@@ -2748,7 +2762,7 @@ class Sonos(object):
             for item in AnnouncementZones:
                 dev = indigo.devices[int(item)]
                 zoneIP = dev.pluginProps["address"]
-                CurrentTransportActions = self.parseCurrentTransportActions (self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetCurrentTransportActions", ""))
+                CurrentTransportActions = self.parseCurrentTransportActions(self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "GetCurrentTransportActions", ""))
 
                 for state in SavedState:
                     if state[0] == dev.states['ZP_LocalUID']:
@@ -2759,30 +2773,30 @@ class Sonos(object):
                             else:
                                 QueueReady = False
 
-                            if CurrentTransportActions.find("Seek") >= 0 and QueueReady == True:
+                            if CurrentTransportActions.find("Seek") >= 0 and QueueReady:
                                 # restore track number
                                 self.logger.debug(f"{state[0]}: Restore Track Number: {state[9]}")
-                                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+state[9]+"</Target>")
+                                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+state[9]+"</Target>")
                                 # restore rel time
                                 self.logger.debug(f"{state[0]}: Restore Relative Time: {state[12]}")
-                                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>REL_TIME</Unit><Target>"+state[12]+"</Target>")
+                                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>REL_TIME</Unit><Target>"+state[12]+"</Target>")
 
                                 # restore Q_Repeat
                                 if state[2] == "off":
                                     Q_setting = 0
                                 else:
                                     Q_setting = 1
-                                self.actionDirect (PA(dev.id, {'setting':Q_setting}), "Q_Repeat")
+                                self.actionDirect(PA(dev.id, {'setting': Q_setting}), "Q_Repeat")
 
                             # restore play state
                             self.logger.debug(f"{state[0]}: Restore Play State: {state[5]}")
-                            if (state[5] == "PLAYING"):
-                                self.actionDirect (PA(dev.id), "Play")
-                            elif (state[5] == "PAUSED"):
-                                self.actionDirect (PA(dev.id), "Play")
-                                self.actionDirect (PA(dev.id), "Pause")
-                            #else:
-                            #	self.actionDirect (PA(dev.id), "Stop")
+                            if state[5] == "PLAYING":
+                                self.actionDirect(PA(dev.id), "Play")
+                            elif state[5] == "PAUSED":
+                                self.actionDirect(PA(dev.id), "Play")
+                                self.actionDirect(PA(dev.id), "Pause")
+                            # else:
+                            #    self.actionDirect(PA(dev.id), "Stop")
 
             AnnouncementZones = []
             actionBusy = 0
@@ -2796,12 +2810,12 @@ class Sonos(object):
             scopeUrl = 'http://api.microsofttranslator.com'
             grantType = 'client_credentials'
 
-            postdata = {'grant_type':grantType, 'scope':scopeUrl, 'client_id':self.MSTranslateClientID, 'client_secret':self.MSTranslateClientSecret}
+            postdata = {'grant_type': grantType, 'scope': scopeUrl, 'client_id': self.MSTranslateClientID, 'client_secret': self.MSTranslateClientSecret}
             response = requests.post(authUrl, data=postdata)
 
             if response.status_code == 200:
-                content = json.loads (response.content)
-                return (content['access_token'])
+                content = json.loads(response.content)
+                return content['access_token']
             else:
                 self.logger.error(f"[{time.asctime()}] Cannot authenticate to Microsoft Translate")
                 return False
@@ -2824,7 +2838,7 @@ class Sonos(object):
             Languages = ET.fromstring(response.content)
             for lang in Languages:
                 langCodes.append(lang.text)
-            languageCodes = str(langCodes).replace("'",'"')
+            languageCodes = str(langCodes).replace("'", '"')
 
             # self.myLocale = self.getLocale()
             # if self.myLocale is None:
@@ -2836,7 +2850,7 @@ class Sonos(object):
             name_code = dict(zip(langCodes, eval(response.content)))
             self.logger.info(f"Loaded Microsoft Translate Voices... [{len(name_code)}]")
 
-            return (name_code)
+            return name_code
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -2849,13 +2863,13 @@ class Sonos(object):
             grantType = 'client_credentials'
 
             accessToken = self.MicrosoftTranslateAuth()
-            if accessToken == False:
+            if not accessToken:
                 return False
 
-            headers = {'Content-Type':'audio/mp3', 'Authorization':'Bearer ' + accessToken}
+            headers = {'Content-Type': 'audio/mp3', 'Authorization': 'Bearer ' + accessToken}
             url = speakUrl + '?text=' + announcement + '&language=' + language + '&format=audio/mp3&options=MaxQuality'
 
-            with open ('announcement.mp3', 'wb') as handle:
+            with open('announcement.mp3', 'wb') as handle:
                 response = requests.get(url, headers=headers, stream=True)
 
                 if response.ok:
@@ -2908,7 +2922,7 @@ class Sonos(object):
                     if self.rootZPIP == 'auto':
                         self.rootZPIP = self.getReferencePlayerIP()
                         self.logger.info(f"Using Reference ZonePlayer IP: {self.rootZPIP}")
-                    if self.rootZPIP != None:
+                    if self.rootZPIP is not None:
                         self.getSonosFavorites()
                         self.getPlaylistsDirect()
                         self.getRT_FavStationsDirect()
@@ -2923,11 +2937,15 @@ class Sonos(object):
                     else:
                         self.logger.error(f"[{time.asctime()}] Reference ZonePlayer IP address invalid.")
 
-                try: self.EventProcessor = self.plugin.pluginPrefs["EventProcessor"]
-                except Exception as exception_error: self.EventProcessor = "SoCo"
+                try:
+                    self.EventProcessor = self.plugin.pluginPrefs["EventProcessor"]
+                except Exception as exception_error:
+                    self.EventProcessor = "SoCo"
 
-                try: self.EventIP = self.plugin.pluginPrefs["EventIP"]
-                except Exception as exception_error: self.logger.error(f"[{time.asctime()}] Could not retrieve Event Listener IP address.")
+                try:
+                    self.EventIP = self.plugin.pluginPrefs["EventIP"]
+                except Exception as exception_error:
+                    self.logger.error(f"[{time.asctime()}] Could not retrieve Event Listener IP address.")
 
                 try:
                     self.EventCheck = self.plugin.pluginPrefs["EventCheck"]
@@ -2956,7 +2974,7 @@ class Sonos(object):
                 try:
                     if self.SoundFilePath != self.plugin.pluginPrefs["SoundFilePath"]:
                         self.SoundFilePath = self.plugin.pluginPrefs["SoundFilePath"]
-                        if self.SoundFilePath != None and self.SoundFilePath != "":
+                        if self.SoundFilePath is not None and self.SoundFilePath != "":
                             self.getSoundFiles()
                 except Exception as exception_error:
                     self.logger.error(f"[{time.asctime()}] Could not retrieve SoundFilePath.")
@@ -3094,14 +3112,13 @@ class Sonos(object):
 
             if len(errorsDict) > 0:
                 self.logger.error("\t Validation Errors")
-                return (False, valuesDict, errorsDict)
+                return False, valuesDict, errorsDict
             else:
                 self.logger.debug("\t Validation Succesful")
-                return (True, valuesDict)
+                return True, valuesDict
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
-
 
     ######################################################################################
 
@@ -3146,7 +3163,7 @@ class Sonos(object):
 
     def getZP_SonosFavorites(self, filter=""):
         try:
-            array=[]
+            array = []
             for title in Sonos_Favorites:
                 array.append((title[4], title[1]))
             return array
@@ -3166,7 +3183,7 @@ class Sonos(object):
             array = []
             for station in Sonos_Pandora:
                 array.append((station[0], station[3] + ": " + station[1]))
-            array.sort(key=lambda x:x[1])
+            array.sort(key=lambda x: x[1])
             return array
 
         except Exception as exception_error:
@@ -3177,8 +3194,8 @@ class Sonos(object):
             array = []
             for channel in Sonos_SiriusXM:
                 array.append((channel[1], channel[2]))
-            #	array.append((channel[3], str(channel[0]).zfill(3) + " | " + channel[4]))
-            #array.sort(key=lambda x:x[1])
+            # array.append((channel[3], str(channel[0]).zfill(3) + " | " + channel[4]))
+            # array.sort(key=lambda x:x[1])
             return array
 
         except Exception as exception_error:
@@ -3196,7 +3213,7 @@ class Sonos(object):
             array = []
             for voice in IVONAVoices:
                 array.append((voice[0], voice[4] + " | " + voice[1]))
-            array.sort(key=lambda x:x[1])
+            array.sort(key=lambda x: x[1])
             return array
 
         except Exception as exception_error:
@@ -3207,7 +3224,7 @@ class Sonos(object):
             array = []
             for voice in PollyVoices:
                 array.append((voice[0], voice[4] + " | " + voice[1]))
-            array.sort(key=lambda x:x[1])
+            array.sort(key=lambda x: x[1])
             return array
 
         except Exception as exception_error:
@@ -3256,7 +3273,7 @@ class Sonos(object):
             array = []
             for code in self.MSTranslateVoices:
                 array.append((code, self.MSTranslateVoices[code]))
-            array.sort(key=lambda x:x[1])
+            array.sort(key=lambda x: x[1])
             return array
 
         except Exception as exception_error:
@@ -3326,7 +3343,7 @@ class Sonos(object):
                             value = uri_group + dev.states['ZP_LocalUID']
                         if self.plugin.stateUpdatesDebug:
                             self.logger.debug(f"\t Updating Device: {rdev.name}, State: {state}, Value: {value}")
-                        if value == None or value == "None":
+                        if value is None or value == "None":
                             rdev.updateStateOnServer(state, "")
                         else:
                             rdev.updateStateOnServer(state, value.encode('utf-8'))
@@ -3382,7 +3399,7 @@ class Sonos(object):
                         dev.updateStateOnServer(state, value)
                     dev.updateStateOnServer("ZP_ART", mdev.states['ZP_ART'])
                     try:
-                        shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+mdev.states['ZP_ZoneName']+"_art.jpg", \
+                        shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+mdev.states['ZP_ZoneName']+"_art.jpg",
                                      "/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg")
                     except Exception as exception_error:
                         pass
@@ -3393,7 +3410,7 @@ class Sonos(object):
     def getLocale(self):
         try:
             locale.setlocale(locale.LC_ALL, '')
-            return (locale.getdefaultlocale()[0])
+            return locale.getdefaultlocale()[0]
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -3403,43 +3420,43 @@ class Sonos(object):
             global Sonos_Favorites
             Sonos_Favorites = []
 
-            #list_count = 0
-            #ZP  = self.restoreString(self.SOAPSend (self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"),1)
-            #ZPxml = ET.fromstring(ZP)
-            #iter = ZPxml.getiterator()
-            #for element in iter:
-            #	if str(element).find("}item") >= 0:
-            #		if element.keys():
-            #			for name, value in element.items():
-            #				if name == "id":
-            #					e_id = value
-            #		for child in element.getchildren():
-            #			ctag = str(child.tag).split('}')
-            #			if ctag[1] == "title":
-            #				e_title = self.restoreString(child.text,0)
-            #			elif ctag[1] == "res":
-            #				e_res = self.restoreString(child.text,0)
-            #				e_res_clean = child.text
-            #			elif ctag[1] == "resMD":
-            #				e_resMD = child.text
-            #				# self.logger.info(f"resMD: {e_resMD}")
-            #				#e_class = self.parsePoint(e_resMD, "&lt;upnp:class&gt;", "&lt;/upnp:class&gt;")
-            #			elif ctag[1] == "ordinal":
-            #				e_ordinal = child.text
-            #		Sonos_Favorites.append ((e_res, e_title, e_resMD, e_res_clean, e_id))
-            #		self.logger.debug(f"\tSonos Favorites: {e_id}, {e_title}, {e_res}")
-            #		list_count = list_count + 1
-            #self.logger.info(f"Loaded Sonos Favorites... [{list_count}]")
+            # list_count = 0
+            # ZP  = self.restoreString(self.SOAPSend(self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"),1)
+            # ZPxml = ET.fromstring(ZP)
+            # iter = ZPxml.getiterator()
+            # for element in iter:
+            # 	if str(element).find("}item") >= 0:
+            # 		if element.keys():
+            # 			for name, value in element.items():
+            # 				if name == "id":
+            # 					e_id = value
+            # 		for child in element.getchildren():
+            # 			ctag = str(child.tag).split('}')
+            # 			if ctag[1] == "title":
+            # 				e_title = self.restoreString(child.text,0)
+            # 			elif ctag[1] == "res":
+            # 				e_res = self.restoreString(child.text,0)
+            # 				e_res_clean = child.text
+            # 			elif ctag[1] == "resMD":
+            # 				e_resMD = child.text
+            # 				# self.logger.info(f"resMD: {e_resMD}")
+            # 				#e_class = self.parsePoint(e_resMD, "&lt;upnp:class&gt;", "&lt;/upnp:class&gt;")
+            # 			elif ctag[1] == "ordinal":
+            # 				e_ordinal = child.text
+            # 		Sonos_Favorites.append ((e_res, e_title, e_resMD, e_res_clean, e_id))
+            # 		self.logger.debug(f"\tSonos Favorites: {e_id}, {e_title}, {e_res}")
+            # 		list_count = list_count + 1
+            # self.logger.info(f"Loaded Sonos Favorites... [{list_count}]")
 
-            res = self.restoreString(self.SOAPSend (self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"),1)
+            res = self.restoreString(self.SOAPSend(self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"), 1)
             Favorites = ET.fromstring(res)
             for Favorite in Favorites.findall('.//{urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/}item'):
                 e_id = Favorite.attrib['id']
                 e_res_clean = Favorite.findtext('.//{urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/}res')
-                e_res = self.restoreString(e_res_clean,0)
-                e_title = self.restoreString(Favorite.findtext('.//{http://purl.org/dc/elements/1.1/}title'),0)
+                e_res = self.restoreString(e_res_clean, 0)
+                e_title = self.restoreString(Favorite.findtext('.//{http://purl.org/dc/elements/1.1/}title'), 0)
                 e_resMD = Favorite.findtext('.//{urn:schemas-rinconnetworks-com:metadata-1-0/}resMD')
-                Sonos_Favorites.append ((e_res, e_title, e_resMD, e_res_clean, e_id))
+                Sonos_Favorites.append((e_res, e_title, e_resMD, e_res_clean, e_id))
                 self.logger.debug(f"\tSonos Favorites: {e_id}, {e_title}, {e_res}")
             self.logger.info(f"Loaded Sonos Favorites... [{len(Sonos_Favorites)}]")
 
@@ -3451,7 +3468,7 @@ class Sonos(object):
             global Sonos_Playlists
             list_count = 0
             Sonos_Playlists = []
-            ZP  = self.restoreString(self.SOAPSend (self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>SQ:</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"),1)
+            ZP  = self.restoreString(self.SOAPSend(self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>SQ:</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"), 1)
             # self.logger.debug(f"ZP: {ZP}")
             ZPxml = ET.fromstring(ZP)
             # iter = ZPxml.getiterator()
@@ -3466,10 +3483,10 @@ class Sonos(object):
                     for child in list(element.iter()):
                         ctag = str(child.tag).split('}')
                         if ctag[1] == "title":
-                            e_title = self.restoreString(child.text,0)
+                            e_title = self.restoreString(child.text, 0)
                         elif ctag[1] == "res":
                             e_res = child.text
-                    Sonos_Playlists.append ((e_res, e_title, e_id))
+                    Sonos_Playlists.append((e_res, e_title, e_id))
                     self.logger.debug(f"\tPlaylist: {e_id}, {e_title}, {e_res}")
                     list_count = list_count + 1
             self.logger.info(f"Loaded Playlists... [{list_count}]")
@@ -3481,7 +3498,7 @@ class Sonos(object):
             global Sonos_RT_FavStations
             list_count = 0
             Sonos_RT_FavStations = []
-            ZP  = self.restoreString(self.SOAPSend (self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>R:0/0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"),1)
+            ZP  = self.restoreString(self.SOAPSend(self.rootZPIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>R:0/0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"), 1)
             # self.logger.debug(f"ZP: {ZP}")
             ZPxml = ET.fromstring(ZP)
             # iter = ZPxml.getiterator()
@@ -3498,8 +3515,8 @@ class Sonos(object):
                         if ctag[1] == "title":
                             e_title = child.text
                         elif ctag[1] == "res":
-                            e_res = self.restoreString(child.text,0)
-                    Sonos_RT_FavStations.append ((e_res, e_title))
+                            e_res = self.restoreString(child.text, 0)
+                    Sonos_RT_FavStations.append((e_res, e_title))
                     self.logger.debug(f"\tRadioTime Favorite Station: {e_id}, {e_title}, {e_res}")
                     list_count = list_count + 1
             self.logger.info(f"Loaded RadioTime Favorite Stations... [{list_count}]")
@@ -3522,12 +3539,11 @@ class Sonos(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-
     def getPandora(self, PandoraEmailAddress, PandoraPassword, PandoraNickname):
         try:
             global Sonos_Pandora
             list_count = 0
-            #Sonos_Pandora = []
+            # Sonos_Pandora = []
 
             pandora = Pandora()
             pandora.authenticate(PandoraEmailAddress, PandoraPassword)
@@ -3543,33 +3559,33 @@ class Sonos(object):
     def getSiriusXM(self):
         try:
             global Sonos_SiriusXM
-            #list_count = 0
+            # list_count = 0
             Sonos_SiriusXM = []
 
             # attempt 1 with website scraping
-            #url = "https://www.siriusxm.com/userservices/cl/en-us/xml/lineup/250/client/ump"
-            #response = requests.get(url)
-            #if response.ok:
-            #	root = ET.fromstring(response.content)
-            #	for Channel in root.findall('.//channels'):
-            #		Sonos_SiriusXM.append((int(Channel.findtext('siriusChannelNo')), int(Channel.findtext('xmChannelNo')), Channel.findtext('channelKey'), Channel.findtext('contentId'), Channel.findtext('name')))
-            #		self.logger.debug( f'\tSiriusXM: {Channel.findtext("siriusChannelNo")}|{Channel.findtext("xmChannelNo")}|{Channel.findtext("channelKey")}|{Channel.findtext("contentId")}|{Channel.findtext("name")}')
-            #		list_count = list_count + 1
-            #	Sonos_SiriusXM.sort(key=lambda x:x[0])
-            #	self.logger.info(f"Loaded SiriusXM Stations.. [{list_count}]")
-            #else:
-            #	self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
+            # url = "https://www.siriusxm.com/userservices/cl/en-us/xml/lineup/250/client/ump"
+            # response = requests.get(url)
+            # if response.ok:
+            # 	root = ET.fromstring(response.content)
+            # 	for Channel in root.findall('.//channels'):
+            # 		Sonos_SiriusXM.append((int(Channel.findtext('siriusChannelNo')), int(Channel.findtext('xmChannelNo')), Channel.findtext('channelKey'), Channel.findtext('contentId'), Channel.findtext('name')))
+            #       self.logger.debug( f'\tSiriusXM: {Channel.findtext("siriusChannelNo")}|{Channel.findtext("xmChannelNo")}|{Channel.findtext("channelKey")}|{Channel.findtext("contentId")}|{Channel.findtext("name")}')
+            #       list_count = list_count + 1
+            #   Sonos_SiriusXM.sort(key=lambda x:x[0])
+            #   self.logger.info(f"Loaded SiriusXM Stations.. [{list_count}]")
+            # else:
+            #   self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
 
             # attempt 2 with MusicService
-            #try:
-            #	SiriusXMChannels = MusicService('SiriusXM').get_metadata(item='live_category:all_channels', count=500)
-            #	for item in SiriusXMChannels:
-            #		Sonos_SiriusXM.append((int(item.title.split('-')[0]), item.id, item.title))
-            #		self.logger.debug(f'\tSiriusXM: {item.title}')
-            #	Sonos_SiriusXM.sort(key=lambda x:x[0])
-            #	self.logger.info(f"Loaded SiriusXM Stations.. [{len(SiriusXMChannels)}]")
+            # try:
+            #   SiriusXMChannels = MusicService('SiriusXM').get_metadata(item='live_category:all_channels', count=500)
+            #   for item in SiriusXMChannels:
+            #       Sonos_SiriusXM.append((int(item.title.split('-')[0]), item.id, item.title))
+            #       self.logger.debug(f'\tSiriusXM: {item.title}')
+            #   Sonos_SiriusXM.sort(key=lambda x:x[0])
+            #   self.logger.info(f"Loaded SiriusXM Stations.. [{len(SiriusXMChannels)}]")
             # except Exception as exception_error:
-            #	self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
+            #   self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")
 
             # attempt 3 with Sonos Music API
             headers = {'Content-Type': 'text/xml; charset="utf-8"',	 'Host': 'sonos.mountain.siriusxm.com', 'User-Agent': 'Indigo', 'CONNECTION': 'close', 'ACCEPT-ENCODING': 'gzip', 'ACCEPT-LANGUAGE': 'en-US'}
@@ -3638,7 +3654,7 @@ class Sonos(object):
                     xm_title = item.findtext('ns1:title', namespaces=namespaces)
                     Sonos_SiriusXM.append((int(xm_title.split('-')[0]), xm_id, xm_title))
                     self.logger.debug(f'\tSiriusXM: {xm_title}')
-                Sonos_SiriusXM.sort(key=lambda x:x[0])
+                Sonos_SiriusXM.sort(key=lambda x: x[0])
                 self.logger.info(f"Loaded SiriusXM Stations.. [{len(Sonos_SiriusXM)}]")
             except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] Error getting SiriusXM Channel Lineup")

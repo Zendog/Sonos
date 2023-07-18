@@ -94,9 +94,7 @@ class Plugin(indigo.PluginBase):
         # Now tell Python to search for packages in the Plugin Packages folder
         sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
 
-        print(sys.path)
-
-
+        # print(sys.path)
 
         # Now perform imports
         self.optional_packages_checked = list()  # List of optional packages already checked
@@ -266,8 +264,8 @@ class Plugin(indigo.PluginBase):
             if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
-            if self.Sonos != None:
-                self.Sonos.deviceStartComm (dev)
+            if self.Sonos is not None:
+                self.Sonos.deviceStartComm(dev)
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -277,15 +275,15 @@ class Plugin(indigo.PluginBase):
             if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
-            if self.Sonos != None:
-                self.Sonos.deviceStopComm (dev)
+            if self.Sonos is not None:
+                self.Sonos.deviceStopComm(dev)
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         try:
-            if self.Sonos != None:
+            if self.Sonos is not None:
                 return self.Sonos.closedPrefsConfigUi(valuesDict, userCancelled)
             else:
                 return valuesDict, userCancelled
