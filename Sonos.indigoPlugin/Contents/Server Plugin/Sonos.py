@@ -351,7 +351,7 @@ class Sonos(object):
     def exception_handler(self, exception_error_message, log_failing_statement):
         filename, line_number, method, statement = traceback.extract_tb(sys.exc_info()[2])[-1]
         module = filename.split('/')
-        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method}'"
+        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method} [{self.globals[PLUGIN_INFO][PLUGIN_VERSION]}]'"
         if log_failing_statement:
             log_message = log_message + f"\n   Failing statement [line {line_number}]: '{statement}'"
         else:
@@ -360,13 +360,6 @@ class Sonos(object):
 
     def startup(self):
         try:
-            try:
-                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
-            except ImportError as exception_error:
-                self.logger.critical(f"PLUGIN STOPPED: {exception_error}")
-                self.do_not_start_stop_devices = True
-                self.stopPlugin()  # noqa
-
             global NSVoices
 
             self.logger.debug("Sonos Plugin Startup...")

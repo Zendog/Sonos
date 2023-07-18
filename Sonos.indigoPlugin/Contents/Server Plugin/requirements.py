@@ -21,6 +21,7 @@ except ImportError:
 
 def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packages_checked):
     try:
+        logger.info("requirements_check starting ...")
         pip_version = f'pip{sys.version_info.major}.{sys.version_info.minor}'
 
         # see https://stackoverflow.com/questions/50380624/find-pip-packages-pkg-resources-specify-custom-target-directory
@@ -58,6 +59,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
         package_names_to_install_or_update_list = list()
         package_pip_commands_to_install_or_update = ""
         for line in lines:
+            logger.info(f"Line: {line}")
             optional = False
             if line == '':  # Ignore if blank line
                 continue
@@ -87,7 +89,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
                     continue
                 else:
                     if requirements_package not in optional_packages_checked:
-                        optionals = (f"{optionals}\nOptional '{requirements_package}' Package missing.\n\n"
+                        optionals = (f"{optionals}\nOptional '{requirements_package}' Package is missing.\n\n"
                                      "If you need it, copy and paste the following pip command into a terminal window and press return:\n\n"
                                      f"{pip_version} install {requirements_package}=={version.parse(requirements_version)}\n")
                         optional_packages_checked.append(requirements_package)
@@ -122,10 +124,13 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
             pip_message = f"{pip_message}\n\nCopy and paste the following pip {command_ui} into a terminal window and press return:\n"
             pip_message = f"{pip_message}\n{package_pip_commands_to_install_or_update}"
             pip_message = f"\n\n{pip_message}\n\nOnce installed | updated, reload the Plugin. \n\n"
-            raise ImportError(pip_message)
+            raise ImportError(False, pip_message)  # False = Normal import error and plugin will be stopped
 
         if optionals != "":
-            logger.warning(f"\n{optionals}\nOnce any of the optional package(s) listed above have been installed, reload the Plugin. \n")
+            optional_warning = f"\n{optionals}\nOnce any of the optional package(s) listed above have been installed, reload the Plugin. \n"
+            raise ImportError(True, optional_warning)  # True = Optional import error for which a warning will be issued i.e. plugin won't be stopped
+
+        logger.info("... requirements_check ending.")
 
     except IOError as exception_message:
         raise IOError(f"Unable to access requirements file to check required packages. IO Error: {exception_message}")

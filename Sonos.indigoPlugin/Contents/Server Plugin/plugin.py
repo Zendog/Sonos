@@ -43,6 +43,13 @@ from constants import *
 # if imports_successful:
 #     from Sonos import Sonos
 
+indiPref_plugin_stopped = """<?xml version="1.0" encoding="UTF-8"?>
+<Prefs type="dict">
+    <plugin_stopped type="bool">true</plugin_stopped>
+</Prefs>
+
+"""
+
 
 class Plugin(indigo.PluginBase):
 
@@ -55,6 +62,8 @@ class Plugin(indigo.PluginBase):
 
         # Initialise dictionary to store plugin Globals
         self.globals = dict()
+
+        self.stop_plugin = False  # Used by Startup method to determine if plugin should be stopped. Set in __init__ method if python Packages need to be installed | updated.
 
         self.Sonos = None
 
@@ -75,6 +84,8 @@ class Plugin(indigo.PluginBase):
 
         self.logger = logging.getLogger("Plugin.Sonos")
 
+        self.logger.info("Plugin logging now started.")
+
         # Create Plugin Packages folder if it doesn't exist
         self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.python_packages"
         if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
@@ -85,58 +96,68 @@ class Plugin(indigo.PluginBase):
 
         print(sys.path)
 
-        # # Create Plugin Resources folder if it doesn't exist
-        # self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Plugins/Sonos.indigoPlugin/Contents/Packages"
-        #
-        # if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
-        #     self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
 
-        # Now tell Python to search for packages in the Plugin Packages folder
-        # sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
 
         # Now perform imports
-
-        imports_successful = True
-        try:
-            print(f"Import: from twisted.internet import reactor")
-            from twisted.internet import reactor
-
-            print(f"Import: from twisted.internet.protocol import DatagramProtocol")
-            from twisted.internet.protocol import DatagramProtocol
-
-            print(f"Import: from twisted.application.internet import MulticastServer")
-            from twisted.application.internet import MulticastServer
-
-            print(f"Import: xmltodict")
-            import xmltodict
-
-            print(f"Import: lxml")
-            import lxml
-
-            from lxml import etree as LXML
-        except ImportError as exception:
-            imports_successful = False
-            print(f"Import failed:\n{exception}")
-
-        print(f"Imports successful?: {imports_successful}")
-
-        # Original Sonos plugin
-
-        if imports_successful:
-            from Sonos import Sonos
-
         self.optional_packages_checked = list()  # List of optional packages already checked
+        try:
+            self.logger.info("About to check requirements ...")
+            requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
+            self.logger.info("... Checking requirements ended with no error.")
+        except ImportError as exception_error_list:
+            self.logger.info("... Checking requirements ended with IMPORT ERROR.")
+            exception_optional = exception_error_list.args[0]
+            exception_error = exception_error_list.args[1]
+            if not exception_optional:
+                self.logger.info("Plugin will be stopped.")
+                self.logger.critical(f"__INIT__ PLUGIN STOPPED AS PYTHON PACKAGE(S) REQUIRE INSTALLING | UPDATING: {exception_error}")
+                self.stop_plugin = True
+            else:
+                self.logger.info("Plugin will not be stopped.")
+                self.logger.warning(exception_error)
 
-        print(f"Imports Successful?: {imports_successful}")
-        if imports_successful:
-            self.Sonos = Sonos(self, pluginPrefs)
+        # imports_successful = True
+        # try:
+        #     print(f"Import: from twisted.internet import reactor")
+        #     from twisted.internet import reactor
+        #
+        #     print(f"Import: from twisted.internet.protocol import DatagramProtocol")
+        #     from twisted.internet.protocol import DatagramProtocol
+        #
+        #     print(f"Import: from twisted.application.internet import MulticastServer")
+        #     from twisted.application.internet import MulticastServer
+        #
+        #     print(f"Import: xmltodict")
+        #     import xmltodict
+        #
+        #     print(f"Import: lxml")
+        #     import lxml
+        #
+        #     from lxml import etree as LXML
+        # except ImportError as exception:
+        #     imports_successful = False
+        #     print(f"Import failed:\n{exception}")
+        #
+        # print(f"Imports successful?: {imports_successful}")
+
         self.debug = False
         self.xmlDebug = False
         self.eventsDebug = False
         self.stateUpdatesDebug = False
         self.StopThread = False
 
-        self.do_not_start_stop_devices = False  # Used in conjunction with requirements.py for Python package checking
+        if not self.stop_plugin:
+            from Sonos import Sonos
+            self.Sonos = Sonos(self, pluginPrefs)
+        else:
+            # Check if this plugin's preferences file exists. If it doesn't create a temporary one to avoid config display error
+            if len(dict(pluginPrefs))  == 1000:  # TODO: Set to zero to enable below logic
+                self.globals[PLUGIN_PREFS_FILE] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.indiPref"
+                if not os.path.exists(self.globals[PLUGIN_PREFS_FILE]):
+                    with open(self.globals[PLUGIN_PREFS_FILE], "w+") as f:
+                        f.writelines(indiPref_plugin_stopped)
+
+        self.logger.info("Plugin __init__ ended.")
 
     def __del__(self):
         indigo.PluginBase.__del__(self)
@@ -145,20 +166,20 @@ class Plugin(indigo.PluginBase):
     def display_plugin_information(self):
         try:
             def plugin_information_message():
-                startup_message_ui = "Plugin Information:\n"
-                startup_message_ui += f"{'':={'^'}80}\n"
-                startup_message_ui += f"{'Plugin Name:':<30} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}\n"
-                startup_message_ui += f"{'Plugin Version:':<30} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}\n"
-                startup_message_ui += f"{'Plugin ID:':<30} {self.globals[PLUGIN_INFO][PLUGIN_ID]}\n"
-                startup_message_ui += f"{'Indigo Version:':<30} {indigo.server.version}\n"
-                startup_message_ui += f"{'Indigo License:':<30} {indigo.server.licenseStatus}\n"
-                startup_message_ui += f"{'Indigo API Version:':<30} {indigo.server.apiVersion}\n"
-                startup_message_ui += f"{'Architecture:':<30} {platform.machine()}\n"
-                startup_message_ui += f"{'Python Version:':<30} {sys.version.split(' ')[0]}\n"
-                startup_message_ui += f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}\n"
-                startup_message_ui += f"{'Plugin Process ID:':<30} {os.getpid()}\n"
-                startup_message_ui += f"{'':={'^'}80}\n"
-                return startup_message_ui
+                plugin_information_ui = "Plugin Information:\n"
+                plugin_information_ui += f"{'':={'^'}80}\n"
+                plugin_information_ui += f"{'Plugin Name:':<30} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}\n"
+                plugin_information_ui += f"{'Plugin Version:':<30} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}\n"
+                plugin_information_ui += f"{'Plugin ID:':<30} {self.globals[PLUGIN_INFO][PLUGIN_ID]}\n"
+                plugin_information_ui += f"{'Indigo Version:':<30} {indigo.server.version}\n"
+                plugin_information_ui += f"{'Indigo License:':<30} {indigo.server.licenseStatus}\n"
+                plugin_information_ui += f"{'Indigo API Version:':<30} {indigo.server.apiVersion}\n"
+                plugin_information_ui += f"{'Architecture:':<30} {platform.machine()}\n"
+                plugin_information_ui += f"{'Python Version:':<30} {sys.version.split(' ')[0]}\n"
+                plugin_information_ui += f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}\n"
+                plugin_information_ui += f"{'Plugin Process ID:':<30} {os.getpid()}\n"
+                plugin_information_ui += f"{'':={'^'}80}\n"
+                return plugin_information_ui
 
             self.logger.info(plugin_information_message())
 
@@ -169,7 +190,7 @@ class Plugin(indigo.PluginBase):
     def exception_handler(self, exception_error_message, log_failing_statement):
         filename, line_number, method, statement = traceback.extract_tb(sys.exc_info()[2])[-1]
         module = filename.split('/')
-        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method}'"
+        log_message = f"'{exception_error_message}' in module '{module[-1]}', method '{method} [{self.globals[PLUGIN_INFO][PLUGIN_VERSION]}]'"
         if log_failing_statement:
             log_message = log_message + f"\n   Failing statement [line {line_number}]: '{statement}'"
         else:
@@ -192,17 +213,15 @@ class Plugin(indigo.PluginBase):
 
     def startup(self):
         try:
-            # Create preferences packages folder if it doesn't exist
-            try:
-                requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
-            except ImportError as exception_error:
-                self.logger.critical(f"PLUGIN STOPPED AS PYTHON PACKAGE(S) REQUIRE INSTALLING | UPDATING: {exception_error}")
-                self.do_not_start_stop_devices = True
+            self.logger.info("Plugin startup started.")
+            if self.stop_plugin:
+                self.logger.info("Plugin being stopped.")
                 self.stopPlugin()
+                self.logger.info("Plugin stop request completed.")
+            elif self.Sonos is not None:
+                self.Sonos.startup()
 
-            if not self.do_not_start_stop_devices:
-                if self.Sonos != None:
-                    self.Sonos.startup()
+            self.logger.info("Plugin startup ended.")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -210,8 +229,9 @@ class Plugin(indigo.PluginBase):
     def shutdown(self):
         try:
             self.logger.debug("Method: shutdown")
-            if not self.do_not_start_stop_devices:
-                self.Sonos.shutdown()
+            if not self.stop_plugin:
+                if self.Sonos is not None:
+                    self.Sonos.shutdown()
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -222,8 +242,8 @@ class Plugin(indigo.PluginBase):
         try:
             self.sleep(5.0)  # Delay start of concurrent thread
 
-            if not self.do_not_start_stop_devices:
-                if self.Sonos != None:
+            if not self.stop_plugin:
+                if self.Sonos is not None:
                     self.Sonos.runConcurrentThread()
             else:
                 self.StopThread = True
@@ -233,9 +253,9 @@ class Plugin(indigo.PluginBase):
 
     def stopConcurrentThread(self):
         try:
-            if not self.do_not_start_stop_devices:
+            if not self.stop_plugin:
                 self.StopThread = True
-                if self.Sonos != None:
+                if self.Sonos is not None:
                     self.Sonos.stopConcurrentThread()
 
         except Exception as exception_error:
@@ -243,7 +263,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, dev):
         try:
-            if self.do_not_start_stop_devices:  # This is set to True if Package requirements listed in requirements.txt are not met
+            if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
             if self.Sonos != None:
@@ -254,7 +274,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStopComm(self, dev):
         try:
-            if self.do_not_start_stop_devices:  # This is set to True if Package requirements listed in requirements.txt are not met
+            if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
                 return
 
             if self.Sonos != None:
@@ -265,7 +285,10 @@ class Plugin(indigo.PluginBase):
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         try:
-            return self.Sonos.closedPrefsConfigUi(valuesDict, userCancelled)
+            if self.Sonos != None:
+                return self.Sonos.closedPrefsConfigUi(valuesDict, userCancelled)
+            else:
+                return valuesDict, userCancelled
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
