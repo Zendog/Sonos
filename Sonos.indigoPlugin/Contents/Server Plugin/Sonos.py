@@ -3617,7 +3617,7 @@ class Sonos(object):
                 root = ET.fromstring(response.content)
                 SessionID = root.findtext('.//ns1:getSessionIdResult', namespaces=namespaces)
             except Exception as exception_error:
-                self.logger.error(f"[{time.asctime()}] SiriusXM SessionID communications error")
+                self.logger.error(f"[{time.asctime()}] SiriusXM SessionID communications error: {exception_error}")
                 return
 
             if SessionID is None:

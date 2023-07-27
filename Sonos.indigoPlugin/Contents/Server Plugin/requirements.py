@@ -21,7 +21,7 @@ except ImportError:
 
 def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packages_checked):
     try:
-        logger.info("requirements_check starting ...")
+        # logger.info("requirements_check starting ...")  # TODO: Debug only
         pip_version = f'pip{sys.version_info.major}.{sys.version_info.minor}'
 
         # see https://stackoverflow.com/questions/50380624/find-pip-packages-pkg-resources-specify-custom-target-directory
@@ -59,7 +59,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
         package_names_to_install_or_update_list = list()
         package_pip_commands_to_install_or_update = ""
         for line in lines:
-            logger.info(f"Line: {line}")
+            # logger.info(f"Line: {line}")  # TODO: Debug only
             optional = False
             if line == '':  # Ignore if blank line
                 continue
@@ -81,6 +81,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
                     target = ""
                     if requirements_package == "lxml":
                         target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
+                    # target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
                     package_names_to_install_or_update_list.append(requirements_package)
                     package_pip_commands_to_install_or_update = f"{package_pip_commands_to_install_or_update}{pip_version} install {requirements_package}=={version.parse(requirements_version)}{target}\n"
 
@@ -99,6 +100,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
                 target = ""
                 if requirements_package == "lxml":
                     target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
+                # target = f" --target \"{plugin_packages_folder}\""  # Temporary fix for Indigo IPH lxml issue (12-July-2023)
                 package_names_to_install_or_update_list.append(requirements_package)
                 package_pip_commands_to_install_or_update = f"{package_pip_commands_to_install_or_update}{pip_version} install --upgrade {requirements_package}=={version.parse(requirements_version)}{target}\n"
 
@@ -130,7 +132,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
             optional_warning = f"\n{optionals}\nOnce any of the optional package(s) listed above have been installed, reload the Plugin. \n"
             raise ImportError(True, optional_warning)  # True = Optional import error for which a warning will be issued i.e. plugin won't be stopped
 
-        logger.info("... requirements_check ending.")
+        # logger.info("... requirements_check ending.")  # TODO: Debug only
 
     except IOError as exception_message:
         raise IOError(f"Unable to access requirements file to check required packages. IO Error: {exception_message}")

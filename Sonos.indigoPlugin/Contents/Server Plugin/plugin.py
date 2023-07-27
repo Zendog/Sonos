@@ -88,6 +88,7 @@ class Plugin(indigo.PluginBase):
 
         # Create Plugin Packages folder if it doesn't exist
         self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.python_packages"
+        # self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Plugins/Sonos.indigoplugin/Contents/Packages"
         if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
             self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
 
@@ -99,19 +100,19 @@ class Plugin(indigo.PluginBase):
         # Now perform imports
         self.optional_packages_checked = list()  # List of optional packages already checked
         try:
-            self.logger.info("About to check requirements ...")
+            # self.logger.info("About to check requirements ...")
             requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
-            self.logger.info("... Checking requirements ended with no error.")
+            # self.logger.info("... Checking requirements ended with no error.")
         except ImportError as exception_error_list:
-            self.logger.info("... Checking requirements ended with IMPORT ERROR.")
+            # self.logger.info("... Checking requirements ended with IMPORT ERROR.")
             exception_optional = exception_error_list.args[0]
             exception_error = exception_error_list.args[1]
             if not exception_optional:
-                self.logger.info("Plugin will be stopped.")
+                # self.logger.info("Plugin will be stopped.")
                 self.logger.critical(f"__INIT__ PLUGIN STOPPED AS PYTHON PACKAGE(S) REQUIRE INSTALLING | UPDATING: {exception_error}")
                 self.stop_plugin = True
             else:
-                self.logger.info("Plugin will not be stopped.")
+                # self.logger.info("Plugin will not be stopped as Import is optional.")
                 self.logger.warning(exception_error)
 
         # imports_successful = True
