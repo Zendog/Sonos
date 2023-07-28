@@ -3595,19 +3595,19 @@ class Sonos(object):
             SoapMessage = (
                     '<?xml version="1.0" encoding="utf-8"?>'
                     '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">'
-                    '<s:Header>'
-                    '<credentials xmlns="http://www.sonos.com/Services/1.1">'
-                    '<deviceId>' + self.SonosDeviceID + '</deviceId>'
-                                                        '<deviceProvider>Sonos</deviceProvider>'
-                                                        '</credentials>'
-                                                        '</s:Header>'
-                                                        '<s:Body>'
-                                                        '<getSessionId xmlns="http://www.sonos.com/Services/1.1">'
-                                                        '<username>' + self.SiriusXMID + '</username>'
-                                                                                         '<password>' + self.SiriusXMPassword + '</password>'
-                                                                                                                                '</getSessionId>'
-                                                                                                                                '</s:Body>'
-                                                                                                                                '</s:Envelope>')
+                        '<s:Header>'
+                            '<credentials xmlns="http://www.sonos.com/Services/1.1">'
+                                '<deviceId>' + self.SonosDeviceID + '</deviceId>'
+                                '<deviceProvider>Sonos</deviceProvider>'
+                            '</credentials>'
+                        '</s:Header>'
+                        '<s:Body>'
+                            '<getSessionId xmlns="http://www.sonos.com/Services/1.1">'
+                                '<username>' + self.SiriusXMID + '</username>'
+                                '<password>' + self.SiriusXMPassword + '</password>'
+                            '</getSessionId>'
+                        '</s:Body>'
+                    '</s:Envelope>')
 
             headers['SOAPACTION'] = 'http://www.sonos.com/Services/1.1#getSessionId'
             headers['Content-Length'] = str(len(SoapMessage))
@@ -3618,6 +3618,7 @@ class Sonos(object):
                 SessionID = root.findtext('.//ns1:getSessionIdResult', namespaces=namespaces)
             except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] SiriusXM SessionID communications error: {exception_error}")
+                self.logger.error(f"SOAP Message:\n{SoapMessage}\n")
                 return
 
             if SessionID is None:
