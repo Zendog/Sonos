@@ -249,17 +249,15 @@ class SSDPListener(DatagramProtocol):
     def SSDPProcess(self, address, data_bytes):
         try:
             message = {'address': address}
-
             try:
                 data = data_bytes.decode("utf-8")
             except Exception as exception_error:
-
-                self.sonos_class_self.exception_handler(f"UTF-8: {exception_error}", True)
+                # self.sonos_class_self.exception_handler(f"UTF-8: {exception_error}", True)
                 try:
                     data = data_bytes.decode("latin1")
                     self.latin_count += 1
-                    if self.latin_count < 11:
-                        self.sonos_class_self.error(f"LATIN1 Data [{self.latin_count}]:\n{data}\n")
+                    if self.latin_count < 1:  # Disable error report
+                        self.sonos_class_self.logger.error(f"LATIN1 Data [{self.latin_count}]:\n{data}\n")
                 except Exception as exception_error:
                     self.sonos_class_self.exception_handler(f"LATIN1: {exception_error}", True)
                     return
@@ -2322,6 +2320,7 @@ class Sonos(object):
                         l2p = pluginAction.props.get("setting")
                         for title in Sonos_Favorites:
                             if title[0] == l2p:
+                                self.logger.info(f"Z_SonosRadio Title: {title[1]}")  # DEBUG for 'b' display issue
                                 pTitle = self.cleanString(title[1]).encode('ascii', 'xmlcharrefreplace')
                                 URI = title[3]
                                 MD = title[2]
