@@ -234,7 +234,7 @@ class PA():
 class SSDPListener(DatagramProtocol):
     def __init__(self, sonos_class_self):
         self.sonos_class_self = sonos_class_self
-        a = 1
+        self.latin_count = 0
 
     def startProtocol(self):
         self.transport.setTTL(5)
@@ -250,7 +250,19 @@ class SSDPListener(DatagramProtocol):
         try:
             message = {'address': address}
 
-            data = data_bytes.decode("utf-8")
+            try:
+                data = data_bytes.decode("utf-8")
+            except Exception as exception_error:
+
+                self.sonos_class_self.exception_handler(f"UTF-8: {exception_error}", True)
+                try:
+                    data = data_bytes.decode("latin1")
+                    self.latin_count += 1
+                    if self.latin_count < 11:
+                        self.sonos_class_self.error(f"LATIN1 Data [{self.latin_count}]:\n{data}\n")
+                except Exception as exception_error:
+                    self.sonos_class_self.exception_handler(f"LATIN1: {exception_error}", True)
+                    return
 
             if ("Sonos" in data) and ("NOTIFY" in data):
                 # print(f"SSDPProcess data: {data}")
@@ -3613,12 +3625,19 @@ class Sonos(object):
             headers['Content-Length'] = str(len(SoapMessage))
 
             try:
+                self.logger.info(f"\nSiriusXM Logic Point 1\n")
+                self.logger.info(f"Base URL: {base_url}\n")
+                self.logger.info(f"Headers: {headers}\n")
+                self.logger.info(f"SOAP Message:\n{SoapMessage.encode('utf-8')}\n")
                 response = requests.post(base_url, headers=headers, data=SoapMessage.encode("utf-8"))
+                self.logger.info("SiriusXM Logic Point 2\n")
+                self.logger.error(f"SiriusXM Response: {response} [Reason: {response.reason}]\n\nContent: {response.content}\n")
                 root = ET.fromstring(response.content)
+                self.logger.info("SiriusXM Logic Point 3\n")
                 SessionID = root.findtext('.//ns1:getSessionIdResult', namespaces=namespaces)
+                self.logger.info("SiriusXM Logic Point 4\n")
             except Exception as exception_error:
                 self.logger.error(f"[{time.asctime()}] SiriusXM SessionID communications error: {exception_error}")
-                self.logger.error(f"SOAP Message:\n{SoapMessage}\n")
                 return
 
             if SessionID is None:
