@@ -278,9 +278,14 @@ class SSDPListener(DatagramProtocol):
                                 dev.setErrorStateOnServer("error")
                             elif message["NTS"] == "ssdp:alive":
                                 self.sonos_class_self.updateStateOnServer(dev, "alive", time.asctime())
-                                self.sonos_class_self.logger.debug(f"[{time.asctime()}] Received ALIVE message from ZonePlayer: {dev.name}")
+                                # self.sonos_class_self.logger.debug(f"[{time.asctime()}] Received ALIVE message from ZonePlayer: {dev.name}")
                                 # self.sonos_class_self.logger.info(f"[{time.asctime()}] Received ALIVE message from ZonePlayer: {dev.name}")
-                                if int(message["X-RINCON-BOOTSEQ"]) != int(dev.states["bootseq"]):
+                                # self.sonos_class_self.logger.warning(f"SSDPProcess - NTS - Message: {message}")
+                                try:
+                                    bootseq = int(dev.states.get("bootseq", 0))
+                                except ValueError:
+                                    bootseq = 0
+                                if int(message["X-RINCON-BOOTSEQ"]) != bootseq:
                                     self.sonos_class_self.socoResubscribe(dev, message["X-RINCON-BOOTSEQ"])
                         break
         except Exception as exception_error:
@@ -2421,7 +2426,7 @@ class Sonos(object):
 
                     self.logger.info(f"[{time.asctime()}] {thumbAction} for station: {PandoraStation}, artist: {partist}, track: {ptrack} on ZonePlayer: {dev.name}")
                 except Exception as exception_error:
-                    self.logger.error(f"[{time.asctime()}] Unable to {thumbAction} track on ZonePlzyer: {dev.name}")
+                    self.logger.error(f"[{time.asctime()}] Unable to {thumbAction} track on ZonePlayer: {dev.name}")
 
             else:
                 self.logger.error(f"[{time.asctime()}] Pandora not actively playing on ZonePlayer: {dev.name}")
@@ -2895,7 +2900,12 @@ class Sonos(object):
 
     def getReferencePlayerIP(self):
         try:
-            return soco.discover().pop().ip_address
+            discovered_speakers = soco.discover()
+            self.logger.info(f"Number of discovered speakers = {len(discovered_speakers)}")
+            debug = 1  # Debug breakpoint
+            debug_2 = debug + 1
+
+            return discovered_speakers.pop().ip_address
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement

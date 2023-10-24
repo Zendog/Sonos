@@ -16,8 +16,6 @@ try:
 except ImportError:
     pass
 
-# import time  # TODO: REMOVE THIS AS DEBUGGING ONLY
-
 
 def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packages_checked):
     try:
@@ -31,6 +29,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
         try:
             for count, item in enumerate(packages):
                 packages_dict[item] = pkg_resources.get_distribution(item).version
+                # logger.info(f"packages_dict[item]: {item} = {packages_dict[item]}")  # TODO: Debug only
         except:  # noqa
             pass
 
@@ -41,6 +40,7 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
             dists_list = list(f"{d.metadata['Name']}=={d.metadata['Version']}" for d in dists)
             for dist in dists_list:
                 dist_package, dist_version = dist.split("==")
+                logger.info(f"Distribution: Package={dist_package}, Version={dist_version}")  # TODO: Debug only
                 packages_dict[dist_package] = dist_version
         except Exception as exception_error:
             a = 1  # Debug point
@@ -58,8 +58,12 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
         lines = file.readlines()
         package_names_to_install_or_update_list = list()
         package_pip_commands_to_install_or_update = ""
+
+        # logger.info(f"Packages Dict: {packages_dict}")  # TODO: Debug only
+
+        # Loop down entries in requirements.txt
         for line in lines:
-            # logger.info(f"Line: {line}")  # TODO: Debug only
+            # logger.info(f"Line [1]: {line}")  # TODO: Debug only
             optional = False
             if line == '':  # Ignore if blank line
                 continue
@@ -71,11 +75,17 @@ def requirements_check(plugin_id, logger, plugin_packages_folder, optional_packa
                 optional = True
                 line = line[10:].strip()
 
-            # logger.info(f"Line: {line}")  # TODO: Debug only
+            # logger.info(f"Line [2]: {line}")  # TODO: Debug only
             requirements_package, requirements_version = line.split("==")
+            # e.g. requirements_package = 'Twisted' , requirements_version = '22.10.0'
 
             try:
-                plugin_package_version = packages_dict[requirements_package]
+                # Check if correct package installed
+                try:
+                    plugin_package_version = packages_dict[requirements_package]
+                except KeyError:
+                    plugin_package_version = packages_dict[requirements_package.lower()]
+                # logger.info(f"Line [3]: {plugin_package_version}")  # TODO: Debug only
             except KeyError as exception_error:
                 if not optional:
                     target = ""
