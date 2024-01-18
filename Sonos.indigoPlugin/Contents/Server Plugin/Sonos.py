@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 
-import requirements  # Autolog additiom
+
 from constants import *
 import locale
 import sys
@@ -13,10 +13,6 @@ import time
 import socket
 import subprocess
 import traceback
-import urllib
-import urllib.parse
-from urllib.request import urlopen
-import urllib.request
 import shutil
 import json
 import logging
@@ -32,8 +28,8 @@ import re
 from AppKit import NSSpeechSynthesizer  # noqa
 from AppKit import NSURL  # noqa
 
-# sys.path.insert(1, "./lib")
 import requests
+
 try:
     from twisted.internet import reactor
     from twisted.internet.protocol import DatagramProtocol
@@ -67,6 +63,13 @@ try:
 except ImportError:
     pass
 
+try:
+    import urllib
+    import urllib.parse
+    from urllib.request import urlopen
+    import urllib.request
+except ImportError:
+    pass
 # ============================== Custom Imports ===============================
 try:
     import indigo  # noqa
@@ -355,7 +358,7 @@ class Sonos(object):
         else:
             self.lame_platform_folder = "apple_silicon"
 
-        self.optional_packages_checked = plugin.optional_packages_checked  # List of optional packages already checked
+        # self.optional_packages_checked = plugin.optional_packages_checked  # List of optional packages already checked
 
         # Set Plugin Config Values - Autolog additiom
         self.closedPrefsConfigUi(pluginPrefs, False)  # Autolog additiom

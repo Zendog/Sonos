@@ -8,10 +8,47 @@
 # ============================== Native Imports ===============================
 import os
 import platform
-import requirements
 import sys
 import traceback
 # import aiohttp
+
+# =================== requirements.txt imports ==================
+import_errors = []
+try:
+    from twisted.internet import reactor
+    from twisted.internet.protocol import DatagramProtocol
+    from twisted.application.internet import MulticastServer
+except ImportError:
+    import_errors.append("twisted")
+
+try:
+    from gtts import gTTS
+except ImportError:
+    import_errors.append("gTTS")
+
+try:
+    import pyvona
+except ImportError:
+    import_errors.append("pyvona")
+
+try:
+    import boto3
+except ImportError:
+    import_errors.append("boto3")
+
+try:
+    from mutagen.mp3 import MP3
+    from mutagen.aiff import AIFF
+except ImportError:
+    import_errors.append("mutagen")
+
+try:
+    import urllib
+    import urllib.parse
+    from urllib.request import urlopen
+    import urllib.request
+except ImportError:
+    import_errors.append("urllib")
 
 # ============================== Custom Imports ===============================
 try:
@@ -20,28 +57,11 @@ try:
 except ImportError:
     pass
 
-# try:
-#     print(f"Import: from twisted.internet import reactor")
-#     from twisted.internet import reactor
-#
-#     print(f"Import: from twisted.internet.protocol import DatagramProtocol")
-#     from twisted.internet.protocol import DatagramProtocol
-#
-#     print(f"Import: from twisted.application.internet import MulticastServer")
-#     from twisted.application.internet import MulticastServer
-#
-#     print(f"Import: xmltodict")
-#     import xmltodict
-# except ImportError:
-#     imports_successful = True
-#
-# print(f"Imports successful?: {imports_successful}")
+from pandora import Pandora
 
 # ============================== Plugin Imports ===============================
 from constants import *
 
-# if imports_successful:
-#     from Sonos import Sonos
 
 indiPref_plugin_stopped = """<?xml version="1.0" encoding="UTF-8"?>
 <Prefs type="dict">
@@ -58,14 +78,12 @@ class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
-        # print(f"TEST PRINT: {imports_successful}")
-
         # Initialise dictionary to store plugin Globals
         self.globals = dict()
 
-        self.stop_plugin = False  # Used by Startup method to determine if plugin should be stopped. Set in __init__ method if python Packages need to be installed | updated.
-
         self.Sonos = None
+
+        self.pluginPrefs = pluginPrefs
 
         # Initialise Indigo plugin info
         self.globals[PLUGIN_INFO] = {}
@@ -86,75 +104,11 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info("Plugin logging now started.")
 
-        # Create Plugin Packages folder if it doesn't exist
-        self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.python_packages"
-        # self.globals[PLUGIN_PACKAGES_FOLDER] = f"{self.globals[PLUGIN_INFO][PATH]}/Plugins/Sonos.indigoplugin/Contents/Packages"
-        if not os.path.exists(self.globals[PLUGIN_PACKAGES_FOLDER]):
-            self.mkdir_with_mode(self.globals[PLUGIN_PACKAGES_FOLDER])
-
-        # Now tell Python to search for packages in the Plugin Packages folder
-        sys.path.insert(1, self.globals[PLUGIN_PACKAGES_FOLDER])
-
-        # print(sys.path)
-
-        # Now perform imports
-        self.optional_packages_checked = list()  # List of optional packages already checked
-        try:
-            # self.logger.info("About to check requirements ...")
-            requirements.requirements_check(self.globals[PLUGIN_INFO][PLUGIN_ID], self.logger, self.globals[PLUGIN_PACKAGES_FOLDER], self.optional_packages_checked)
-            # self.logger.info("... Checking requirements ended with no error.")
-        except ImportError as exception_error_list:
-            # self.logger.info("... Checking requirements ended with IMPORT ERROR.")
-            exception_optional = exception_error_list.args[0]
-            exception_error = exception_error_list.args[1]
-            if not exception_optional:
-                # self.logger.info("Plugin will be stopped.")
-                self.logger.critical(f"__INIT__ PLUGIN STOPPED AS PYTHON PACKAGE(S) REQUIRE INSTALLING | UPDATING: {exception_error}")
-                self.stop_plugin = True
-            else:
-                # self.logger.info("Plugin will not be stopped as Import is optional.")
-                self.logger.warning(exception_error)
-
-        # imports_successful = True
-        # try:
-        #     print(f"Import: from twisted.internet import reactor")
-        #     from twisted.internet import reactor
-        #
-        #     print(f"Import: from twisted.internet.protocol import DatagramProtocol")
-        #     from twisted.internet.protocol import DatagramProtocol
-        #
-        #     print(f"Import: from twisted.application.internet import MulticastServer")
-        #     from twisted.application.internet import MulticastServer
-        #
-        #     print(f"Import: xmltodict")
-        #     import xmltodict
-        #
-        #     print(f"Import: lxml")
-        #     import lxml
-        #
-        #     from lxml import etree as LXML
-        # except ImportError as exception:
-        #     imports_successful = False
-        #     print(f"Import failed:\n{exception}")
-        #
-        # print(f"Imports successful?: {imports_successful}")
-
         self.debug = False
         self.xmlDebug = False
         self.eventsDebug = False
         self.stateUpdatesDebug = False
         self.StopThread = False
-
-        if not self.stop_plugin:
-            from Sonos import Sonos
-            self.Sonos = Sonos(self, pluginPrefs)
-        else:
-            # Check if this plugin's preferences file exists. If it doesn't create a temporary one to avoid config display error
-            if len(dict(pluginPrefs))  == 1000:  # TODO: Set to zero to enable below logic
-                self.globals[PLUGIN_PREFS_FILE] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.indiPref"
-                if not os.path.exists(self.globals[PLUGIN_PREFS_FILE]):
-                    with open(self.globals[PLUGIN_PREFS_FILE], "w+") as f:
-                        f.writelines(indiPref_plugin_stopped)
 
         self.logger.info("Plugin __init__ ended.")
 
@@ -213,12 +167,24 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         try:
             self.logger.info("Plugin startup started.")
-            if self.stop_plugin:
-                self.logger.info("Plugin being stopped.")
-                self.stopPlugin()
-                self.logger.info("Plugin stop request completed.")
-            elif self.Sonos is not None:
-                self.Sonos.startup()
+
+            if len(import_errors):
+                stop_message = "Plugin startup cancelled due to one or more required plugin Python libraries missing:\n"
+                for package in import_errors:
+                    stop_message = f"{stop_message}      - {package}\n"
+                return stop_message
+
+            from Sonos import Sonos
+            self.Sonos = Sonos(self, self.pluginPrefs)
+            self.Sonos.startup()
+
+            # else:
+            #     # Check if this plugin's preferences file exists. If it doesn't create a temporary one to avoid config display error
+            #     if len(dict(self.pluginPrefs)) == 1000:  # TODO: Set to zero to enable below logic
+            #         self.globals[PLUGIN_PREFS_FILE] = f"{self.globals[PLUGIN_INFO][PATH]}/Preferences/Plugins/com.ssi.indigoplugin.Sonos.indiPref"
+            #         if not os.path.exists(self.globals[PLUGIN_PREFS_FILE]):
+            #             with open(self.globals[PLUGIN_PREFS_FILE], "w+") as f:
+            #                 f.writelines(indiPref_plugin_stopped)
 
             self.logger.info("Plugin startup ended.")
 
@@ -228,9 +194,8 @@ class Plugin(indigo.PluginBase):
     def shutdown(self):
         try:
             self.logger.debug("Method: shutdown")
-            if not self.stop_plugin:
-                if self.Sonos is not None:
-                    self.Sonos.shutdown()
+            if self.Sonos is not None:
+                self.Sonos.shutdown()
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
@@ -241,9 +206,8 @@ class Plugin(indigo.PluginBase):
         try:
             self.sleep(5.0)  # Delay start of concurrent thread
 
-            if not self.stop_plugin:
-                if self.Sonos is not None:
-                    self.Sonos.runConcurrentThread()
+            if self.Sonos is not None:
+                self.Sonos.runConcurrentThread()
             else:
                 self.StopThread = True
 
@@ -252,19 +216,15 @@ class Plugin(indigo.PluginBase):
 
     def stopConcurrentThread(self):
         try:
-            if not self.stop_plugin:
-                self.StopThread = True
-                if self.Sonos is not None:
-                    self.Sonos.stopConcurrentThread()
+            self.StopThread = True
+            if self.Sonos is not None:
+                self.Sonos.stopConcurrentThread()
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def deviceStartComm(self, dev):
         try:
-            if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
-                return
-
             if self.Sonos is not None:
                 self.Sonos.deviceStartComm(dev)
 
@@ -273,9 +233,6 @@ class Plugin(indigo.PluginBase):
 
     def deviceStopComm(self, dev):
         try:
-            if self.stop_plugin:  # This is set to True if Package requirements listed in requirements.txt are not met
-                return
-
             if self.Sonos is not None:
                 self.Sonos.deviceStopComm(dev)
 
