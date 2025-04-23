@@ -1,8 +1,8 @@
-<?xml version="1.0"?>
+<?xml version='1.0' encoding='utf-8'?>
 <Devices>
-<!--	<Device type="custom" id="ZoneController">-->
-<!--		<Name>Sonos Zone Controller</Name>-->
-<!--	</Device>-->
+
+
+
 	<Device type="custom" id="ZonePlayer">
 		<Name>Sonos Zone Player</Name>
 		<ConfigUI>
@@ -53,17 +53,29 @@
 				<ControlPageLabel>Station</ControlPageLabel>
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
+			
 			<State id="ZP_VOLUME">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Volume</TriggerLabel>
 				<ControlPageLabel>Volume</ControlPageLabel>
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
-			<State id="ZP_VOLUME_FIXED">
-				<ValueType>String</ValueType>
-				<TriggerLabel>Volume Fixed</TriggerLabel>
-				<ControlPageLabel>Volume Fixed</ControlPageLabel>
-				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+
+			
+			<State id="ZP_VOLUME_MASTER">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Master Volume</TriggerLabel>
+				<ControlPageLabel>Master</ControlPageLabel>
+			</State>
+			<State id="ZP_VOLUME_LF">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Left Front Volume</TriggerLabel>
+				<ControlPageLabel>LF</ControlPageLabel>
+			</State>
+			<State id="ZP_VOLUME_RF">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Right Front Volume</TriggerLabel>
+				<ControlPageLabel>RF</ControlPageLabel>
 			</State>
 			<State id="ZP_MUTE">
 				<ValueType>String</ValueType>
@@ -283,4 +295,16 @@
 			</State>
 		</States>
 	</Device>
+
+<Actions>
+	<Action id="ZP_SiriusXM" userVisible="true">
+		<Name>Change to SiriusXM Channel</Name>
+		<Description>Change this Sonos device to the selected SiriusXM channel</Description>
+		<ConfigUI>
+			<Field type="popup" id="channelName" label="Channel Name">
+				<List id="channelNameList"/>
+			</Field>
+		</ConfigUI>
+	</Action>
+</Actions>
 </Devices>
