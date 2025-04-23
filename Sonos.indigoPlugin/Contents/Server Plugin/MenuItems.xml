@@ -1,7 +1,27 @@
 <?xml version="1.0"?>
 <MenuItems>
-	<MenuItem id="pluginInformation">
-		<Name>Display Plugin Information</Name>
+    <MenuItem id="pluginInformation">
+        <Name>Display Plugin Information</Name>
         <CallbackMethod>display_plugin_information</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="menuDebugSubscriptions">
+        <Name>🔎 Diagnose SoCo Subscriptions</Name>
+        <CallbackMethod>menuDebugSubscriptions</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="menuTestSiriusXMChannel">
+        <Name>🎧 Test SiriusXM Channel</Name>
+        <CallbackMethod>menuTestSiriusXMChannel</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="refreshSiriusXMChannelCache">
+        <Name>Refresh Channel Cache</Name>
+        <CallbackMethod>menuDeleteandDefineSiriusXMChannels</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="menuDumpSiriusXMChannels">
+        <Name>Dump XM Channels to Log</Name>
+        <CallbackMethod>menuDumpSiriusXMChannels</CallbackMethod>
     </MenuItem>
 </MenuItems>

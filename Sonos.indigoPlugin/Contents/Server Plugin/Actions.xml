@@ -1,5 +1,16 @@
 <?xml version="1.0"?>
 <Actions>
+
+
+	<Action id="ZP_LIST" uiPath="Control">
+	    <Name>Play Playlist</Name>
+	    <Description>Plays the selected Sonos playlist</Description>
+	    <CallbackMethod>actionZP_LIST</CallbackMethod>
+	    <Field id="ZP_LIST" type="menu" defaultValue="">
+	        <List method="getZP_LIST_PlaylistObjects"/>
+	    </Field>
+	</Action>
+	
 	<Action id="actionPlay" deviceFilter="self.ZonePlayer">
 		<Name>Sonos: Play</Name>
 		<CallbackMethod>actionPlay</CallbackMethod>
@@ -68,13 +79,13 @@
 			</Field>
 		</ConfigUI>
 	</Action>
-	<Action id="actionVolumeDown" deviceFilter="self.ZonePlayer" uiPath="Volume">
-		<Name>Sonos: Volume Down</Name>
-		<CallbackMethod>actionVolumeDown</CallbackMethod>
-	</Action>
-	<Action id="actionVolumeUp" deviceFilter="self.ZonePlayer" uiPath="Volume">
+	<Action id="actionVolumeUp" deviceFilter="self.ZonePlayer">
 		<Name>Sonos: Volume Up</Name>
 		<CallbackMethod>actionVolumeUp</CallbackMethod>
+	</Action>
+	<Action id="actionVolumeDown" deviceFilter="self.ZonePlayer">
+		<Name>Sonos: Volume Down</Name>
+		<CallbackMethod>actionVolumeDown</CallbackMethod>
 	</Action>
 	<Action id="sep9" uiPath="Volume"/>
 	<Action id="actionGroupVolume" deviceFilter="self.ZonePlayer" uiPath="Volume">
@@ -339,6 +350,29 @@
 				<Label>ZonePlayer:</Label>
 				<List class="self" filter="withNone" method="getZPDeviceList" dynamicReload="yes"/>
 			</Field>
+###
+
+	<Action id="SetSiriusXMChannel" deviceFilter="self.ZonePlayer">
+	    <Name>Set SiriusXM Channel</Name>
+	    <ConfigUI>
+	        <Field id="channelSelector" type="menu" defaultValue="">
+	            <Label>Choose SiriusXM Channel</Label>
+	            <List class="plugin" method="getSiriusXMChannelList"/>
+	        </Field>
+	    </ConfigUI>
+	    <CallbackMethod>actionSetSiriusXMChannel</CallbackMethod>
+	</Action>
+
+
+
+
+
+
+###
+
+
+
+
 		</ConfigUI>
 		<CallbackMethod>actionZP_setStandalones</CallbackMethod>
 	</Action>
@@ -688,6 +722,10 @@
 				<Label>Chime Before Message:</Label>
 			</Field>
 		</ConfigUI>
+
+
+
+
 		<CallbackMethod>actionZP_announcementMP3</CallbackMethod>
 	</Action>
 	<Action id="sep7"/>
@@ -725,16 +763,30 @@
 		</ConfigUI>
 		<CallbackMethod>actionZP_RT_FavStation</CallbackMethod>
 	</Action>
-	<Action id="actionZP_SiriusXM" deviceFilter="self.ZonePlayer" uiPath="Music Source">
-		<Name>Sonos: SiriusXM Channel</Name>
-		<ConfigUI>
-			<Field id="setting" type="menu">
-				<Label>Sonos SiriusXM Channel:</Label>
-				<List class="self" method="getZP_SiriusXM" dynamicReload="yes"/>
-			</Field>
-		</ConfigUI>
-		<CallbackMethod>actionZP_SiriusXM</CallbackMethod>
+
+
+
+
+
+
+
+	<Action id="ZP_SiriusXM" device="True" deviceFilter="self.ZonePlayer" uiPath="Music Source">
+	    <Name>Sonos: Set SiriusXM Channel</Name>
+	    <CallbackMethod>actionZP_SiriusXM</CallbackMethod>
+	    <ConfigUI>
+	        <Field id="channel" type="menu">
+	            <Label>SiriusXM Channel:</Label>
+	            <List class="self" method="getSiriusXMChannelList" filter="withNone" dynamicReload="true"/>
+	        </Field>
+	    </ConfigUI>
 	</Action>
+
+
+
+
+
+
+
 	<Action id="actionZP_SonosFavorites" deviceFilter="self.ZonePlayer" uiPath="Music Source">
 		<Name>Sonos: Sonos Favorites</Name>
 		<ConfigUI>
@@ -795,5 +847,39 @@
 		<Name>Sonos: Dump URI</Name>
 		<CallbackMethod>actionZP_DumpURI</CallbackMethod>
 	</Action>
+	<ActionType id="actionTogglePlay" uiPath="Sonos Controls" allowPluginToProcess="true">
+    <Name>Toggle Play/Pause</Name>
+    <Description>Toggle playback state (Play/Pause) on a Sonos device</Description>
+    <ConfigUI>
+        <DeviceList id="deviceId" filter="com.indigodomo.plugin.Sonos" label="Target Sonos Device" />
+    </ConfigUI>
+
+
+
+
+</ActionType>
+
+
+
+<Action type="testSiriusXMChannel" id="testSiriusXMChannel" deviceTypeId="sonosDevice">
+    <Name>Test SiriusXM Channel</Name>
+    <CallbackMethod>testSiriusXMChannel</CallbackMethod>
+    <ConfigUI>
+        <!-- no inputs needed -->
+    </ConfigUI>
+</Action>
+
+
+
+
+
+
+
 </Actions>
+
+
+
+
+
+
 
