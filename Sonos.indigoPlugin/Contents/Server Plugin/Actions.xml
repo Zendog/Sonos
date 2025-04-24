@@ -739,16 +739,18 @@
 		</ConfigUI>
 		<CallbackMethod>actionZP_LineIn</CallbackMethod>
 	</Action>
+
 	<Action id="actionZP_Pandora" deviceFilter="self.ZonePlayer" uiPath="Music Source">
 		<Name>Sonos: Pandora Station</Name>
 		<ConfigUI>
-			<Field id="setting" type="menu">
+			<Field id="channelSelector" type="menu">
 				<Label>Sonos Pandora Station:</Label>
 				<List class="self" method="getZP_Pandora" dynamicReload="yes"/>
 			</Field>
 		</ConfigUI>
 		<CallbackMethod>actionZP_Pandora</CallbackMethod>
 	</Action>
+
 	<Action id="actionZP_Queue" deviceFilter="self.ZonePlayer" uiPath="Music Source">
 		<Name>Sonos: Queue</Name>
 		<CallbackMethod>actionZP_Queue</CallbackMethod>
@@ -756,14 +758,13 @@
 	<Action id="actionZP_RT_FavStation" deviceFilter="self.ZonePlayer" uiPath="Music Source">
 		<Name>Sonos: RadioTime Favorite Station</Name>
 		<ConfigUI>
-			<Field id="setting" type="menu">
+			<Field id="channelSelector" type="menu">
 				<Label>Sonos Radiotime Favorite:</Label>
 				<List class="self" method="getZP_RT_FavStations" dynamicReload="yes"/>
 			</Field>
 		</ConfigUI>
 		<CallbackMethod>actionZP_RT_FavStation</CallbackMethod>
 	</Action>
-
 
 
 

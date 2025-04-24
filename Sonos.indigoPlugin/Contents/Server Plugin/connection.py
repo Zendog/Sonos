@@ -7,7 +7,7 @@ import json
 import time
 import urllib.parse
 import urllib.request
-
+import indigo
 
 class AuthenticationError(Exception):
     """Raised when an operation encountered authentication issues."""
@@ -15,6 +15,7 @@ class AuthenticationError(Exception):
 
 
 class PandoraConnection(object):
+
     partner_id = None
     partner_auth_token = None
 
@@ -24,6 +25,7 @@ class PandoraConnection(object):
     time_offset = None
 
     PROTOCOL_VERSION = '5'
+    RPC_URL = "https://tuner.pandora.com/services/json/?"
     RPC_URL = "://tuner.pandora.com/services/json/?"
     DEVICE_MODEL = 'android-generic'
     PARTNER_USERNAME = 'android'
@@ -32,35 +34,85 @@ class PandoraConnection(object):
                         'mp3': 'HTTP_128_MP3'}
     stations = []
 
+
     def __init__(self):
         self.rid = "%07i" % (time.time() % 1e7)
         self.timedelta = 0
 
-    def authenticate(self, user, pwd):
+
+
+
+    def authenticate(self, username, password):
+        import indigo
+        import time
         try:
-            # partner login
-            partner = self.do_request('auth.partnerLogin', True, False, deviceModel=self.DEVICE_MODEL, username=self.PARTNER_USERNAME, password=self.PARTNER_PASSWORD, version=self.PROTOCOL_VERSION)
-            self.partner_id = partner['partnerId']
-            self.partner_auth_token = partner['partnerAuthToken']
+            indigo.server.log(f"🔐 BEGIN PandoraConnection.authenticate() for {username}")
 
-            # sync
-            pandora_time = int(crypt.pandora_decrypt(partner['syncTime'])[4:14])  # TODO - Check this out ???
+            # Step 1: Partner Login
+            partner_response = self.do_request(
+                method='auth.partnerLogin',
+                secure=True,
+                crypted=False,
+                deviceModel=self.DEVICE_MODEL,
+                username=self.PARTNER_USERNAME,
+                password=self.PARTNER_PASSWORD,
+                version=self.PROTOCOL_VERSION
+            )
+            indigo.server.log("✅ Partner login response received")
+
+            self.partner_id = partner_response.get('partnerId')
+            self.partner_auth_token = partner_response.get('partnerAuthToken')
+
+            if not self.partner_id or not self.partner_auth_token:
+                indigo.server.log("❌ Partner login failed: Missing partnerId or partnerAuthToken")
+                return False
+
+            # Step 2: Time Sync
+            encrypted_sync_time = partner_response.get('syncTime')
+            if not encrypted_sync_time:
+                indigo.server.log("❌ Partner login failed: syncTime missing")
+                return False
+
+            decrypted_time = crypt.pandora_decrypt(encrypted_sync_time)
+            pandora_time = int(decrypted_time[4:14])
             self.time_offset = pandora_time - time.time()
+            indigo.server.log(f"⏱ Time sync calculated. Offset: {self.time_offset:.2f} seconds")
 
-            # user login
-            user = self.do_request('auth.userLogin', True, True, username=user, password=pwd, loginType="user", returnStationList=True)
-            self.user_id = user['userId']
-            self.user_auth_token = user['userAuthToken']
-            self.stations = user['stationListResult']['stations']
+            # Step 3: User Login
+            indigo.server.log(f"🔐 Attempting user login for {username}")
+            user_response = self.do_request(
+                method='auth.userLogin',
+                secure=True,
+                crypted=True,
+                username=username,
+                password=password,
+                loginType="user",
+                returnStationList=True
+            )
+            indigo.server.log("✅ User login response received")
+
+            self.user_id = user_response.get('userId')
+            self.user_auth_token = user_response.get('userAuthToken')
+
+            if not self.user_id or not self.user_auth_token:
+                indigo.server.log("❌ User login failed: Missing userId or userAuthToken")
+                return False
+
+            # Step 4: Load Stations
+            self.stations = user_response.get('stationListResult', {}).get('stations', [])
+            indigo.server.log(f"✅ User authenticated. Loaded {len(self.stations)} Pandora stations.")
             return True
-        except:
-            self.partner_id = None
-            self.partner_auth_token = None
-            self.user_id = None
-            self.user_auth_token = None
-            self.time_offset = None
 
+        except Exception as e:
+            indigo.server.log(f"❌ EXCEPTION in authenticate(): {e}")
             return False
+
+
+
+
+
+
+
 
     def search(self, text):
         return self.do_request("music.search", False, True, searchText=text)
@@ -100,79 +152,66 @@ class PandoraConnection(object):
     def delete_feedback(self, station_token, feedback_token):
         self.do_request("station.deleteFeedback", False, True, feedbackId=feedback_token)
 
+
     def do_request(self, method, secure, crypted, **kwargs):
-        url_arg_strings = []
-        if self.partner_id:
-            url_arg_strings.append('partner_id=%s' % self.partner_id)
-        if self.user_id:
-            url_arg_strings.append('user_id=%s' % self.user_id)
-        if self.user_auth_token:
-            url_arg_strings.append('auth_token=%s' % urllib.parse.quote(self.user_auth_token))
-        elif self.partner_auth_token:
-            url_arg_strings.append('auth_token=%s' % urllib.parse.quote(self.partner_auth_token))
+        import indigo
+        import urllib.request
+        import urllib.parse
+        import json
+        import time
 
-        url_arg_strings.append('method=%s' % method)
-        url = ('https' if secure else 'http') + self.RPC_URL + '&'.join(url_arg_strings)
+        try:
+            # Construct query string parameters
+            url_arg_strings = []
+            if self.partner_id:
+                url_arg_strings.append('partner_id=%s' % self.partner_id)
+            if self.user_id:
+                url_arg_strings.append('user_id=%s' % self.user_id)
+            if self.user_auth_token:
+                url_arg_strings.append('auth_token=%s' % urllib.parse.quote(self.user_auth_token))
+            elif self.partner_auth_token:
+                url_arg_strings.append('auth_token=%s' % urllib.parse.quote(self.partner_auth_token))
 
-        if self.time_offset:
-            kwargs['syncTime'] = int(time.time() + self.time_offset)
-        if self.user_auth_token:
-            kwargs['userAuthToken'] = self.user_auth_token
-        elif self.partner_auth_token:
-            kwargs['partnerAuthToken'] = self.partner_auth_token
-        data = json.dumps(kwargs)
+            url_arg_strings.append('method=%s' % method)
+            url = ('https' if secure else 'http') + self.RPC_URL + '&'.join(url_arg_strings)
 
-        if crypted:
-            data = crypt.pandora_encrypt(data)
+            # Add time sync and tokens
+            if self.time_offset:
+                kwargs['syncTime'] = int(time.time() + self.time_offset)
+            if self.user_auth_token:
+                kwargs['userAuthToken'] = self.user_auth_token
+            elif self.partner_auth_token:
+                kwargs['partnerAuthToken'] = self.partner_auth_token
 
-        # execute request
-        req = urllib.request.Request(url, data, {'User-agent': "02strich", 'Content-type': 'text/plain'})
-        response = urllib.request.urlopen(req)
-        text = response.read()
-
-        # parse result
-        tree = json.loads(text)
-        if tree['stat'] == 'fail':
-            code = tree['code']
-            msg = tree['message']
-            if code == 1002:
-                raise AuthenticationError()
+            # Prepare JSON payload
+            payload = json.dumps(kwargs)
+            if crypted:
+                encrypted_str = crypt.pandora_encrypt(payload)  # still a string
+                data = encrypted_str.encode("utf-8")             # encode to bytes
             else:
-                raise ValueError("%d: %s" % (code, msg))
-        elif 'result' in tree:
-            return tree['result']
+                data = payload.encode("utf-8")                   # directly encode
 
+            # Build and send the request
+            headers = {
+                'User-agent': "02strich",
+                'Content-type': 'text/plain'
+            }
+            req = urllib.request.Request(url, data, headers)
+            response = urllib.request.urlopen(req)
+            text = response.read()
 
-if __name__ == "__main__":
-    conn = PandoraConnection()
+            # Decode and parse response
+            tree = json.loads(text)
+            if tree.get('stat') == 'fail':
+                code = tree.get('code')
+                msg = tree.get('message')
+                if code == 1002:
+                    raise AuthenticationError()
+                else:
+                    raise ValueError("%d: %s" % (code, msg))
+            elif 'result' in tree:
+                return tree['result']
 
-    # read username
-    username = input("Username: ")
-
-    # read password
-    password = input("Password: ")
-
-    # authenticate
-    print("Authenticated: " + str(conn.authenticate(username, password)))
-
-    # output stations (without QuickMix)
-    print("users stations:")
-    for station in conn.getStations():
-        if station['isQuickMix']:
-            quickmix = station
-            print("\t" + station['stationName'] + "*")
-        else:
-            print("\t" + station['stationName'])
-
-    # get one song from quickmix
-    print("next song from quickmix:")
-    next = conn.getFragment(quickmix)[0]
-    print(next['artistName'] + ': ' + next['songName'])
-    print(next['audioUrlMap']['highQuality']['audioUrl'])
-
-    # download it
-    #u = urllib2.urlopen(next['audioUrlMap']['highQuality']['audioUrl'])
-    #f = open('test.mp3', 'wb')
-    #f.write(u.read())
-    #f.close()
-    #u.close()
+        except Exception as e:
+            indigo.server.log(f"❌ EXCEPTION in do_request({method}): {e}")
+            raise

@@ -207,8 +207,32 @@ class SonosPlugin(object):
     ### Initialize the SonosPlugin
     ############################################################################################
 
-
     def __init__(self, plugin, pluginPrefs):
+        import uuid
+        import os
+        import json
+        from sxm import SXMClient, RegionChoice, XMChannel
+
+        self.plugin = plugin
+        self.pluginPrefs = pluginPrefs  # ✅ Must be assigned first
+
+        self.logger = logging.getLogger("Plugin.Sonos")
+        self.logger.info(f"Initializing SonosPlugin... [{uuid.uuid4()}]")
+
+        # Safe access to pluginPrefs
+        self.Pandora = self.pluginPrefs.get("Pandora")
+        self.PandoraEmailAddress = self.pluginPrefs.get("PandoraEmailAddress")
+        self.PandoraPassword = self.pluginPrefs.get("PandoraPassword")
+        self.PandoraNickname = self.pluginPrefs.get("PandoraNickname")
+
+        global Sonos_Pandora
+        if self.Pandora and self.PandoraEmailAddress and self.PandoraPassword and not Sonos_Pandora:
+            self.logger.warning("🔁 Preloading Pandora stations at init.")
+            Sonos_Pandora = []  # Clear global list to ensure fresh load
+            self.getPandora(self.PandoraEmailAddress, self.PandoraPassword, self.PandoraNickname)
+
+        # ... continue your normal init process ...
+
         import uuid
         import os
         import json
@@ -264,15 +288,11 @@ class SonosPlugin(object):
         self.siriusxm = None
         self.siriusxm_channels = []
         self.Sonos_SiriusXM = []
-        self.siriusxm_id_map = {}           # ←✅ ADD THIS HERE
+        self.siriusxm_id_map = {}
         self.siriusxm_guid_map = {}
         self.last_siriusxm_guid_by_dev = {}
-        self.soco_by_ip = {}  # IP → soco device map
-        self.last_siriusxm_guid_by_dev = {}  # dev.id → last GUID
+        self.soco_by_ip = {}
         self.soco_devices = {}
-#        self.last_siriusxm_track_by_dev = {}
-#        self.last_siriusxm_artist_by_dev = {}
-
 
         # Hardcoded fallback test entries
         self.siriusxm_guid_map.update({
@@ -285,12 +305,11 @@ class SonosPlugin(object):
         # Run SiriusXM channel loading (cache or live)
         self.load_siriusxm_channel_data()
 
-
-
         self.sorted_siriusxm_guids = sorted(
             [chan["channelGuid"] for chan in self.siriusxm_channels if chan.get("channelGuid")],
             key=lambda g: next((int(c["channelNumber"]) for c in self.siriusxm_channels if c.get("channelGuid") == g), 9999)
         )
+
 
 
     ### End of Initialization
@@ -301,6 +320,10 @@ class SonosPlugin(object):
     ### Actiondirect List Processing
     ############################################################################################
 
+
+############################################################################################
+### Actiondirect List Processing
+############################################################################################
 
     def actionDirect(self, pluginAction, action_id_override=None):
         try:
@@ -343,15 +366,9 @@ class SonosPlugin(object):
                 "Q_RepeatToggle": "actionQ_RepeatToggle",
             }
 
-            #action_key = action_id_override if action_id_override else pluginAction.pluginTypeId
-            action_key = action_id_override or pluginAction.pluginTypeId
-            self.logger.debug(f"🧪 Raw pluginAction.pluginTypeId: {pluginAction.pluginTypeId}")
-            # Normalize: if not already prefixed with "action", prepend it
-            # Normalize using action_map if possible
             raw_key = action_id_override or pluginAction.pluginTypeId
-            action_key = action_map.get(raw_key, raw_key)  # 🔁 this always consults the map
+            action_key = action_map.get(raw_key, raw_key)
             action_id = action_key
-
 
             device_id = int(pluginAction.deviceId)
             self.logger.debug(f"⚡ Action received: {action_id} for device ID {device_id}")
@@ -360,21 +377,24 @@ class SonosPlugin(object):
             dev = indigo.devices[device_id]
             zoneIP = dev.address
 
-            # Table-driven dispatch for modular handlers
+            # Table-driven dispatch with normalized handler signatures
             dispatch_table = {
-                "SetSiriusXMChannel": self.handleAction_SetSiriusXMChannel,
-                "actionZP_SiriusXM": self.handleAction_ZP_SiriusXM,
-                "actionChannelUp": self.handleAction_ChannelUp,                
-                "actionChannelDown": self.handleAction_ChannelDown,
-                "actionZP_setStandalone": self.handleAction_ZP_setStandalone,
-                "actionQ_Shuffle": self.handleAction_Q_Shuffle,
-                "actionQ_Crossfade": self.handleAction_Q_Crossfade,
+                "SetSiriusXMChannel": lambda p, d, z: self.handleAction_SetSiriusXMChannel(p, d, z),
+                "actionZP_SiriusXM": lambda p, d, z: self.handleAction_ZP_SiriusXM(p, d, z),
+                "actionZP_Pandora": lambda p, d, z: self.handleAction_ZP_Pandora(p, d, z, p.props),
+                "actionChannelUp": lambda p, d, z: self.handleAction_ChannelUp(p, d, z),
+                "actionChannelDown": lambda p, d, z: self.handleAction_ChannelDown(p, d, z),
+                "actionZP_setStandalone": lambda p, d, z: self.handleAction_ZP_setStandalone(p, d, z),
+                "actionQ_Shuffle": lambda p, d, z: self.handleAction_Q_Shuffle(p, d, z),
+                "actionQ_Crossfade": lambda p, d, z: self.handleAction_Q_Crossfade(p, d, z),
             }
 
             if action_id in dispatch_table:
                 dispatch_table[action_id](pluginAction, dev, zoneIP)
                 return
 
+            # Inline action handlers follow...
+            # ... (Omitted for brevity)
             # Inline handlers
             if action_id == "actionBassUp":
                 current = int(dev.states.get("ZP_BASS", 0))
@@ -498,6 +518,8 @@ class SonosPlugin(object):
             self.logger.error(f"❌ actionDirect exception: {e}")
 
 
+### End of Actiondirect List Processing
+
  
     ### End of Actiondirect List Processing
 
@@ -505,6 +527,77 @@ class SonosPlugin(object):
     ############################################################################################
     ### Handleaction definitions
     ############################################################################################
+
+
+
+    def handleAction_ZP_Pandora(self, pluginAction, dev, zoneIP, props):
+        try:
+            station_id = pluginAction.props.get("setting") or pluginAction.props.get("channelSelector")
+            self.logger.warning(f"🧪 handleAction_ZP_Pandora() called — device: {dev.name} | zoneIP: {zoneIP}")
+            self.logger.warning(f"🪪 Extracted Pandora station ID: {station_id}")
+
+            if not station_id:
+                self.logger.warning(f"⚠️ No Pandora station ID provided for device ID {dev.id}")
+                return
+
+            global Sonos_Pandora
+            if not Sonos_Pandora:
+                self.logger.warning("⚠️ Sonos_Pandora is empty — attempting fallback reload...")
+                self.logger.warning(f"🔍 Pandora enabled: {self.Pandora} | Email: {self.PandoraEmailAddress} | Password: {'***' if self.PandoraPassword else '(empty)'}")
+                if self.Pandora and self.PandoraEmailAddress and self.PandoraPassword:
+                    Sonos_Pandora = []  # 🔄 Force clear to ensure overwrite
+                    self.getPandora(self.PandoraEmailAddress, self.PandoraPassword, self.PandoraNickname)
+                else:
+                    self.logger.warning("⚠️ Pandora credentials incomplete — skipping reload.")
+
+            self.logger.warning(f"🧾 Known Sonos_Pandora entries: {Sonos_Pandora}")
+            self.logger.warning(f"🧾 Known Sonos_Pandora IDs: {[s[0] for s in Sonos_Pandora]}")
+
+            # Retry lookup after fallback
+            matching_station = next((s for s in Sonos_Pandora if s[0] == station_id), None)
+            if not matching_station:
+                self.logger.warning(f"⚠️ Unknown Pandora station ID: {station_id}")
+                return
+
+            station_name = matching_station[1]
+            nickname = matching_station[3] or ""
+
+            uri = f"x-sonosapi-radio:ST%3a{station_id}?sid=236&flags=8296&sn=1"
+            metadata = f"""<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/"
+                                       xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"
+                                       xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/"
+                                       xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+                <item id="100c2068ST%3a{station_id}" parentID="10fe2064myStations" restricted="true">
+                    <dc:title>{station_name}</dc:title>
+                    <upnp:class>object.item.audioItem.audioBroadcast.#station</upnp:class>
+                    <r:description>My Stations</r:description>
+                    <desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">
+                        SA_RINCON60423_X_#Svc60423-0-Token
+                    </desc>
+                </item>
+            </DIDL-Lite>"""
+
+            self.logger.info(f"📻 Sending {dev.name} to Pandora station: {station_name} ({station_id})")
+
+            soco_dev = self.soco_by_ip.get(zoneIP)
+            if not soco_dev:
+                self.logger.warning(f"⚠️ soco_device is None for zoneIP {zoneIP}")
+                return
+
+            soco_dev.avTransport.SetAVTransportURI([
+                ('InstanceID', 0),
+                ('CurrentURI', uri),
+                ('CurrentURIMetaData', metadata),
+            ])
+            soco_dev.play()
+
+        except Exception as e:
+            self.logger.error(f"❌ handleAction_ZP_Pandora failed for device ID {dev.id}: {e}")
+
+
+
+
+
 
 
     def handleAction_SetSiriusXMChannel(self, pluginAction, dev, zoneIP):
@@ -536,6 +629,7 @@ class SonosPlugin(object):
             self.logger.error(f"❌ handleAction_SetSiriusXMChannel() failed: {e}")
 
 
+ 
 
     def handleAction_ZP_SiriusXM(self, pluginAction, dev, zoneIP, props):
         try:
@@ -649,28 +743,51 @@ class SonosPlugin(object):
             self.logger.error(f"❌ Failed to set crossfade on {dev.name}: {e}")
 
 
-
     def handleAction_Q_Shuffle(self, pluginAction, dev, zoneIP):
         try:
             setting = pluginAction.props.get("setting", False)
             if isinstance(setting, str):
-                setting = setting.lower() == "true"
+                setting = setting.lower() in ["true", "1", "yes"]
 
-            self.logger.warning(f"🔀 Setting shuffle on {dev.name} ({zoneIP}) to {setting}")
-            self.SOAPSend(
-                zoneIP,
-                "/MediaRenderer",
-                "/AVTransport",
-                "SetPlayMode",
-                f"<NewPlayMode>{'SHUFFLE' if setting else 'NORMAL'}</NewPlayMode>"
-            )
-            dev.updateStateOnServer("Q_Shuffle", setting)
-            self.logger.info(f"✅ Shuffle set to {setting} on {dev.name}")
+            play_mode = "SHUFFLE_NOREPEAT" if setting else "NORMAL"
+
+            self.logger.warning(f"🔀 Setting shuffle on {dev.name} ({zoneIP}) to {play_mode}")
+
+            current_uri = dev.states.get("ZP_CurrentTrackURI", "") or dev.states.get("ZP_AVTransportURI", "")
+            self.logger.debug(f"🔍 Current URI for shuffle check: {current_uri}")
+
+            if not self.isShuffleSupported(current_uri):
+                self.logger.warning(f"⚠️ Skipping SetPlayMode on {dev.name} — unsupported stream type: {current_uri}")
+                return
+
+            try:
+                self.SOAPSend(
+                    zoneIP,
+                    "/MediaRenderer",
+                    "/AVTransport",
+                    "SetPlayMode",
+                    f"<InstanceID>0</InstanceID><NewPlayMode>{play_mode}</NewPlayMode>"
+                )
+                self.logger.info(f"✅ Shuffle set to {play_mode} on {dev.name}")
+            except Exception as e:
+                if "errorCode>712" in str(e):
+                    self.logger.warning(f"⚠️ Shuffle not supported on current stream for {dev.name} (UPnP error 712)")
+                else:
+                    raise  # re-raise other errors
 
         except Exception as e:
-            self.logger.error(f"❌ Failed to set shuffle: {e}")
+            self.logger.error(f"❌ handleAction_Q_Shuffle failed for {dev.name}: {e}")
 
 
+
+    def isShuffleSupported(self, uri):
+        unsupported_prefixes = [
+            "x-sonosapi-radio:",  # Pandora
+            "x-sonosapi-hls:",    # SiriusXM
+            "x-sonos-htastream:", # TV
+            "x-rincon-mp3radio:"  # TuneIn or raw streams
+        ]
+        return not any(uri.startswith(pfx) for pfx in unsupported_prefixes)
 
     ### End of Handleaction definitions
 
@@ -1860,6 +1977,8 @@ class SonosPlugin(object):
             if not userCancelled:
                 self.logger.debug(f"[{time.asctime()}] Getting plugin preferences.")
 
+                # ✅ Apply prefs FIRST before referencing them
+                self.plugin.pluginPrefs.update(valuesDict)
                 try:
                     self.plugin.debug = self.plugin.pluginPrefs["showDebugInLog"]
                 except Exception as exception_error:
@@ -2180,6 +2299,9 @@ class SonosPlugin(object):
 
     def startup(self):
         self.logger.info("🔌 Sonos Plugin Starting Up...")
+
+        # Run Pandora channel loading (live)
+        #self.getPandora(self.PandoraEmailAddress, self.PandoraPassword, self.PandoraNickname)
 
         self.sorted_siriusxm_guids = sorted(self.siriusxm_guid_map.keys())
 
@@ -3000,22 +3122,55 @@ class SonosPlugin(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def getPandora(self, PandoraEmailAddress, PandoraPassword, PandoraNickname):
-        try:
-            global Sonos_Pandora
-            list_count = 0
-            # Sonos_Pandora = []
 
+    def getPandora(self, PandoraEmailAddress, PandoraPassword, PandoraNickname):
+        global Sonos_Pandora
+
+        self.logger.warning("🧪 Starting getPandora()")
+        self.logger.warning(f"🧪 Pandora flag: {self.pluginPrefs.get('Pandora')}")
+        self.logger.warning(f"🧪 Email: {PandoraEmailAddress}")
+        self.logger.warning(f"🧪 Password: {'***' if PandoraPassword else '(empty)'}")
+        self.logger.warning(f"🧪 Nickname: {PandoraNickname}")
+        self.logger.debug(f"✅ Sonos_Pandora currently has {len(Sonos_Pandora)} entries")
+
+        # 🛡️ Validate credentials early
+        if not PandoraEmailAddress or not PandoraPassword:
+            self.logger.warning("⚠️ Missing Pandora email or password — skipping getPandora()")
+            return
+
+        try:
+            list_count = 0
             pandora = Pandora()
-            pandora.authenticate(PandoraEmailAddress, PandoraPassword)
-            for station in pandora.get_station_list():
-                Sonos_Pandora.append((station['stationId'], station['stationName'], PandoraEmailAddress, PandoraNickname))
-                self.logger.debug(f"\tPandora: {station['stationId']}, {station['stationName']}, {PandoraNickname}")
-                list_count = list_count + 1
-            self.logger.info(f"Loaded Pandora Stations for {PandoraNickname}... [{list_count}]")
+
+            self.logger.warning("🧪 Calling Pandora.authenticate()...")
+            result = pandora.authenticate(PandoraEmailAddress, PandoraPassword)
+            self.logger.warning(f"🧪 Returned from authenticate(): {result}")
+
+            if not result:
+                self.logger.error("❌ Pandora authentication failed — skipping station fetch.")
+                return
+
+            self.logger.warning("🧪 Authentication successful — calling get_station_list()")
+            stations = pandora.get_station_list()
+
+            for station in stations:
+                Sonos_Pandora.append((
+                    station.get('stationId'),
+                    station.get('stationName'),
+                    PandoraEmailAddress,
+                    PandoraNickname or ''
+                ))
+                self.logger.debug(f"📻 Pandora Station: {station.get('stationId')} - {station.get('stationName')}")
+
+                list_count += 1
+
+            self.logger.info(f"✅ Loaded Pandora Stations for {PandoraNickname or '(no nickname)'}: [{list_count}]")
 
         except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
+            self.logger.error(f"❌ Exception in getPandora(): {exception_error}")
+            self.exception_handler(exception_error, True)
+
+
 
 
 
@@ -3259,16 +3414,14 @@ class SonosPlugin(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def getZP_Pandora(self, filter=""):
+    def getZP_Pandora(self, filter="", valuesDict=None, typeId="", targetId=0):
         try:
-            array = []
-            for station in Sonos_Pandora:
-                array.append((station[0], station[3] + ": " + station[1]))
-            array.sort(key=lambda x: x[1])
-            return array
+            return [(s[0], s[1]) for s in Sonos_Pandora]
+        except Exception as e:
+            self.logger.error(f"❌ getZP_Pandora() failed: {e}")
+            return []
 
-        except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
+
 
     def getZP_SiriusXM(self, filter="", valuesDict=None, typeId="", targetId=0):
         if not self.siriusxm_channels:

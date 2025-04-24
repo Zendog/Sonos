@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-
+import indigo
+indigo.server.log("🧪 [pandora.py] This module was loaded")
 import urllib.request
 from connection import PandoraConnection
 
@@ -20,6 +21,7 @@ class Pandora(object):
     backlog = []
 
     def __init__(self):
+        indigo.server.log("✅ Pandora() constructor called")
         self.connection = PandoraConnection()
 
     def authenticate(self, username, password):

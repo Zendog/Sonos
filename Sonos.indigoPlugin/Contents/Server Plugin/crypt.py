@@ -175,8 +175,18 @@ def pad(s, l):
 
 
 def pandora_encrypt(s):
-    return "".join([blowfish_encode.encrypt(pad(s[i:i + 8], 8)).encode('hex') for i in range(0, len(s), 8)])
+    return "".join([
+        blowfish_encode.encrypt(pad(s[i:i + 8], 8)).encode('latin1').hex()
+        for i in range(0, len(s), 8)
+    ])
+
+    
 
 
 def pandora_decrypt(s):
-    return "".join([blowfish_decode.decrypt(pad(s[i:i + 16].decode('hex'), 8)) for i in range(0, len(s), 16)]).rstrip('\x08')
+    return "".join([
+        blowfish_decode.decrypt(pad(bytes.fromhex(s[i:i + 16]).decode('latin1'), 8))
+        for i in range(0, len(s), 16)
+    ]).rstrip('\x08')
+
+
