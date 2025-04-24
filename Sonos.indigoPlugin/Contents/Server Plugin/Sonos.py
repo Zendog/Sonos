@@ -37,9 +37,15 @@ from soco.core import SoCo
 from soco import SoCo as SoCoDevice
 from soco.events import event_listener
 soco.config.EVENTS_MODULE = soco.events
+# Diagnostic version logging
+logging.getLogger("Plugin.Sonos").warning(
+    f"🧪 SoCo version: {getattr(soco, '__version__', 'unknown')}"
+)
+
 logging.getLogger("Plugin.Sonos").warning(
     f"🧪 The SoCo version used in this plugin was loaded from: {soco.__file__}"
 )
+
 
 try:
     from twisted.internet import reactor
@@ -2300,6 +2306,8 @@ class SonosPlugin(object):
     def startup(self):
         self.logger.info("🔌 Sonos Plugin Starting Up...")
 
+
+        self.logger.warning(f"🧪 netifaces module loaded from: {os.path.abspath(netifaces.__file__)}")
         # Run Pandora channel loading (live)
         #self.getPandora(self.PandoraEmailAddress, self.PandoraPassword, self.PandoraNickname)
 

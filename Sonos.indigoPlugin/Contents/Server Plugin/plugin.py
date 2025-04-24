@@ -343,6 +343,8 @@ class Plugin(indigo.PluginBase):
 
     def display_plugin_information(self):
         try:
+            import soco
+
             def plugin_information_message():
                 plugin_information_ui = "Plugin Information:\n"
                 plugin_information_ui += f"{'':={'^'}80}\n"
@@ -356,6 +358,8 @@ class Plugin(indigo.PluginBase):
                 plugin_information_ui += f"{'Python Version:':<30} {sys.version.split(' ')[0]}\n"
                 plugin_information_ui += f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}\n"
                 plugin_information_ui += f"{'Plugin Process ID:':<30} {os.getpid()}\n"
+                plugin_information_ui += f"{'SoCo Version:':<30} {getattr(soco, '__version__', 'unknown')}\n"
+                plugin_information_ui += f"{'SoCo Path:':<30} {getattr(soco, '__file__', 'unknown')}\n"
                 plugin_information_ui += f"{'':={'^'}80}\n"
                 return plugin_information_ui
 
@@ -363,6 +367,7 @@ class Plugin(indigo.PluginBase):
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
+
 
     ######################################################################################
     def exception_handler(self, exception_error_message, log_failing_statement):
@@ -390,13 +395,12 @@ class Plugin(indigo.PluginBase):
     # plugin startup and shutdown
 
 
-
-
-
-
     def startup(self):
         try:
             self.logger.info("Plugin startup started.")
+
+            # Print plugin information using single source
+            self.logger.info(self.plugin_information_message())
 
             if len(import_errors):
                 stop_message = "Plugin startup cancelled due to one or more required plugin Python libraries missing:\n"
@@ -404,16 +408,18 @@ class Plugin(indigo.PluginBase):
                     stop_message = f"{stop_message}      - {package}\n"
                 return stop_message
 
-            from Sonos import SonosPlugin
             self.logger.warning(f"🧪 Attempting to call deviceStartComm on object of type: {type(self.Sonos)}")
             self.logger.debug(f"🧪 Methods available: {dir(self.Sonos)}")
 
-            self.Sonos.startup()  # ✅ <-- This was commented out
+            if hasattr(self.Sonos, "startup"):
+                self.Sonos.startup()
 
             self.logger.info("Plugin startup ended.")
 
         except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
+            self.exception_handler(exception_error, True)
+
+
 
 
 
@@ -426,6 +432,48 @@ class Plugin(indigo.PluginBase):
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
+
+
+    def plugin_information_message(self):
+        try:
+            import soco
+            soco_version = getattr(soco, "__version__", "unknown")
+            soco_path = getattr(soco, "__file__", "unknown")
+        except Exception:
+            soco_version = "unknown"
+            soco_path = "unknown"
+
+        # Gather lines of content
+        lines = [
+            ("Plugin Name:", self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]),
+            ("Plugin Version:", self.globals[PLUGIN_INFO][PLUGIN_VERSION]),
+            ("Plugin ID:", self.globals[PLUGIN_INFO][PLUGIN_ID]),
+            ("Indigo Version:", indigo.server.version),
+            ("Indigo License:", indigo.server.licenseStatus),
+            ("Indigo API Version:", indigo.server.apiVersion),
+            ("Architecture:", platform.machine()),
+            ("Python Version:", sys.version.split(' ')[0]),
+            ("Mac OS Version:", platform.mac_ver()[0]),
+            ("Plugin Process ID:", str(os.getpid())),
+            ("SoCo Version:", soco_version),
+            ("SoCo Path:", soco_path)
+        ]
+
+        # Calculate maximum line length for formatting bar
+        max_length = max(len(f"{k:<30} {v}") for k, v in lines)
+        divider = "=" * max_length
+
+        # Build output
+        info = "Plugin Information:\n"
+        info += f"{divider}\n"
+        for key, value in lines:
+            info += f"{key:<30} {value}\n"
+        info += f"{divider}\n"
+
+        return info
+
+    
+
 
     ######################################################################################
     # ConcurrentThread: Start & Stop
