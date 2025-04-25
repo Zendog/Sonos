@@ -5,5 +5,10 @@ ifaddr==0.2.0
 lxml==5.1.0
 mutagen==1.47.0
 pyvona==1.2.1
-Twisted==23.10.0
+Twisted==24.11.0
 xmltodict==0.13.0
+soco==0.30.90
+urllib3==2.3.0
+xmltodict==0.14.2
+requests==2.32.2
+ifaddr==0.2.0
