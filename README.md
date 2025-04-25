@@ -7,3 +7,4 @@ This version (1.0.2):
 5. Implemented SiriusXM login and channel processing.
 6. Rewrote and corrected Pandora loging / crypto processing from python 2 to python 3 based calls.
 7. Implemented Pandora login and channel processing.
+8. Added additional modules to requirements.txt
