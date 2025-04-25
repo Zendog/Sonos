@@ -11,7 +11,6 @@ xmltodict==0.14.2
 requests==2.32.2
 ifaddr==0.2.0
 certifi==2025.1.31
-contantly
 idna==3.10
 automat==24.8.1
 attrs==25.3.0
