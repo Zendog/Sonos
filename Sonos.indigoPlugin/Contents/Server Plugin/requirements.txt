@@ -7,3 +7,4 @@ mutagen==1.47.0
 pyvona==1.2.1
 Twisted==23.10.0
 xmltodict==0.13.0
+pandora==1.6.4
