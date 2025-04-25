@@ -10,3 +10,17 @@ urllib3==2.3.0
 xmltodict==0.14.2
 requests==2.32.2
 ifaddr==0.2.0
+certifi==2025.1.31
+contantly==23.10.4
+idna==3.10
+automat==24.8.1
+attrs==25.3.0
+appdirs==1.4.4
+hyperlink==21.0.0
+zope.interface==7.2
+setuptools==78.1.0
+charset_normalizer==3.4.1
+incremental==24.7.2
+lame
+typing_extensions==4.13.0
+
