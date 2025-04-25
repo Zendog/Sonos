@@ -343,29 +343,21 @@ class Plugin(indigo.PluginBase):
 
     def display_plugin_information(self):
         try:
-            import soco            
-            soco_version = getattr(soco, '__version__', 'unknown')
-            soco_path = getattr(soco, '__file__', 'unknown')
-
             def plugin_information_message():
-                lines = []
-                lines.append("Plugin Information:\n")
-                lines.append(f"{'Plugin Name:':<30} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}")
-                lines.append(f"{'Plugin Version:':<30} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}")
-                lines.append(f"{'Plugin ID:':<30} {self.globals[PLUGIN_INFO][PLUGIN_ID]}")
-                lines.append(f"{'Indigo Version:':<30} {indigo.server.version}")
-                lines.append(f"{'Indigo License:':<30} {indigo.server.licenseStatus}")
-                lines.append(f"{'Indigo API Version:':<30} {indigo.server.apiVersion}")
-                lines.append(f"{'Architecture:':<30} {platform.machine()}")
-                lines.append(f"{'Python Version:':<30} {sys.version.split(' ')[0]}")
-                lines.append(f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}")
-                lines.append(f"{'Plugin Process ID:':<30} {os.getpid()}")
-                lines.append(f"{'SoCo Version:':<30} {soco_version}")
-                lines.append(f"{'SoCo Path:':<30} {soco_path}")
-
-                max_length = max(len(line) for line in lines[1:])  # Skip header
-                separator = f"{'':={'^'}{max_length}}"
-                return "\n".join([lines[0], separator] + lines[1:] + [separator])
+                plugin_information_ui = "Plugin Information:\n"
+                plugin_information_ui += f"{'':={'^'}80}\n"
+                plugin_information_ui += f"{'Plugin Name:':<30} {self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME]}\n"
+                plugin_information_ui += f"{'Plugin Version:':<30} {self.globals[PLUGIN_INFO][PLUGIN_VERSION]}\n"
+                plugin_information_ui += f"{'Plugin ID:':<30} {self.globals[PLUGIN_INFO][PLUGIN_ID]}\n"
+                plugin_information_ui += f"{'Indigo Version:':<30} {indigo.server.version}\n"
+                plugin_information_ui += f"{'Indigo License:':<30} {indigo.server.licenseStatus}\n"
+                plugin_information_ui += f"{'Indigo API Version:':<30} {indigo.server.apiVersion}\n"
+                plugin_information_ui += f"{'Architecture:':<30} {platform.machine()}\n"
+                plugin_information_ui += f"{'Python Version:':<30} {sys.version.split(' ')[0]}\n"
+                plugin_information_ui += f"{'Mac OS Version:':<30} {platform.mac_ver()[0]}\n"
+                plugin_information_ui += f"{'Plugin Process ID:':<30} {os.getpid()}\n"
+                plugin_information_ui += f"{'':={'^'}80}\n"
+                return plugin_information_ui
 
             self.logger.info(plugin_information_message())
 
@@ -417,7 +409,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"🧪 Methods available: {dir(self.Sonos)}")
 
             self.Sonos.startup()  # ✅ <-- This was commented out
-            self.display_plugin_information()
+
             self.logger.info("Plugin startup ended.")
 
         except Exception as exception_error:
