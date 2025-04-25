@@ -1,8 +1,0 @@
-Metadata-Version: 2.1
-Name: pyvona
-Version: 1.2.1
-Summary: Python text-to-speech IVONA Wrapper
-Home-page: http://www.zacharybears.com/pyvona
-Author: Zachary Bears
-Author-email: bears.zachary@gmail.com
-Requires-Dist: requests
