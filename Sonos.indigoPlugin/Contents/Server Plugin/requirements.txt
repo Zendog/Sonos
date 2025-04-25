@@ -1,22 +1,9 @@
-# Core dependencies
-soco==0.30.9
-lxml==5.1.0
-requests>=2.31.0
-netifaces==3.1.1
-ifaddr==0.2.0
-xmltodict==0.13.0
-
-# Audio & TTS support
-mutagen==1.47.0
-gTTS==2.5.0
-pyvona==1.2.1
-
-# AWS support for Polly (and general use)
-boto3==1.34.9
-botocore==1.34.9
-
-# Twisted networking (used by SoCo events, SSDP)
-Twisted==23.10.0
-
-# Optional: HTTP/SSL support
 urllib3==2.0.7
+boto3==1.34.9
+gTTS==2.5.0
+ifaddr==0.2.0
+lxml==5.1.0
+mutagen==1.47.0
+pyvona==1.2.1
+Twisted==23.10.0
+xmltodict==0.13.0
