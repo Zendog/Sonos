@@ -20,4 +20,5 @@ setuptools==78.1.0
 charset_normalizer==3.4.1
 incremental==24.7.2
 typing_extensions==4.13.0
-
+sxm-client==0.2.8
+fake-useragent==1.5.1
