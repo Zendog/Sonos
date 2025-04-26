@@ -1539,26 +1539,31 @@ class SonosPlugin(object):
 
 
 
+
+
+
+
     def channelUpOrDown(self, dev, direction):
         import re
 
-        self.logger.warning(f"⚠️ Determining next SiriusXM channel (by number)...")
+        self.logger.warning(f"⚠️ Determining next SiriusXM channel (using cached value)...")
 
         try:
-            zoneIP = dev.pluginProps.get("address", None)
+            zoneIP = dev.pluginProps.get("address")
             if not zoneIP:
                 self.logger.warning(f"⚠️ Device {dev.name} has no IP address configured.")
                 return
 
-            # Extract SiriusXM channel number from ZP_STATION, e.g. "CH 31 - Tom Petty Radio"
-            station = dev.states.get("ZP_STATION", "")
-            match = re.match(r"CH\s*(\d+)", station)
-            if match:
-                current_channel_number = int(match.group(1))
-                self.logger.debug(f"🔍 Parsed current channel number: {current_channel_number}")
-            else:
-                self.logger.warning(f"⚠️ Could not parse SiriusXM channel number from station state: {station}")
+            if not hasattr(self, "last_known_sxm_channel"):
+                self.logger.warning(f"⚠️ No last known SiriusXM channel cache exists.")
                 return
+
+            current_channel_number = self.last_known_sxm_channel.get(zoneIP)
+            if current_channel_number is None:
+                self.logger.warning(f"⚠️ No cached SiriusXM channel for zone {zoneIP}. Cannot proceed.")
+                return
+
+            self.logger.debug(f"🔍 Cached current channel number: {current_channel_number}")
 
             # Clean, normalize, and validate channel list
             valid_channels = []
@@ -1567,9 +1572,7 @@ class SonosPlugin(object):
                 if raw_ch_num is None:
                     self.logger.warning(f"🚫 Skipping malformed channel (missing number): {ch.get('name')}")
                     continue
-
                 try:
-                    # Accept either int or string form
                     clean_ch_num = int(str(raw_ch_num).strip())
                     ch["channel_number"] = clean_ch_num  # Normalize in-place as int
                     valid_channels.append(ch)
@@ -1581,7 +1584,7 @@ class SonosPlugin(object):
                 self.logger.error("❌ No valid SiriusXM channels found for navigation.")
                 return
 
-            # Sort by channel_number (integer-safe)
+            # Sort by channel_number
             sorted_channels = sorted(valid_channels, key=lambda c: c["channel_number"])
 
             # Log all valid channels
@@ -1612,17 +1615,26 @@ class SonosPlugin(object):
                 f"CH {next_channel['channel_number']} - {next_channel.get('name')}"
             )
 
-            # Send to SiriusXM channel changer
-            self.SiriusXMChannelChanger(dev, next_guid)
+            # Send the next channel
+            self.sendSiriusXMChannel(zoneIP, next_guid, next_channel.get("name"))
 
         except Exception as e:
             self.logger.error(f"❌ Failed to switch channel {direction} for {dev.name}: {e}")
+
+
+        
+
+
+
 
 
 
     ############################################################################################
     ### SiriusXM Generic Channel Changer based on only needing a GUID
     ############################################################################################
+
+
+
 
 
     def SiriusXMChannelChanger(self, dev, guid):
@@ -1670,7 +1682,6 @@ class SonosPlugin(object):
             # ✅ Use cached SoCo object
             soco_dev = self.soco_by_ip.get(zoneIP)
             if not soco_dev:
-                self.logger.warning(f"⚠️ SoCo device not found for IP {zoneIP}, attempting direct fallback")
                 from soco import SoCo
                 soco_dev = SoCo(zoneIP)
                 self.soco_by_ip[zoneIP] = soco_dev
@@ -1686,12 +1697,27 @@ class SonosPlugin(object):
                 channel_number = channel["channel_number"]
                 channel_name = channel["name"]
                 dev.updateStateOnServer("ZP_STATION", f"CH {channel_number} - {channel_name}")
-                self.logger.debug(f"📝 Updated ZP_STATION to CH {channel_number} - {channel_name}")            
+                self.logger.debug(f"📝 Updated ZP_STATION to CH {channel_number} - {channel_name}")
 
             self.logger.info(f"✅ Successfully changed {dev.name} to {title}")
 
+            # --- Save last known SiriusXM channel number ---
+            if not hasattr(self, "last_known_sxm_channel"):
+                self.last_known_sxm_channel = {}
+
+            try:
+                clean_ch_num = int(str(channel.get("channel_number", 0)).strip())
+                self.last_known_sxm_channel[dev.id] = clean_ch_num
+                self.logger.info(f"💾 Saved last known SiriusXM channel {clean_ch_num} for device {dev.name}")
+            except Exception:
+                self.logger.warning(f"⚠️ Could not parse and save channel_number for {dev.name}")
+
         except Exception as e:
             self.logger.error(f"❌ SiriusXMChannelChanger failed for {dev.name}: {e}")
+
+
+
+
 
             
 
@@ -1775,10 +1801,24 @@ class SonosPlugin(object):
 
 
 
+
+
     def sendSiriusXMChannel(self, zoneIP, channel_guid, channel_name):
         import urllib.parse
+
         try:
             self.logger.info("🔁 Entered sendSiriusXMChannel()")
+
+            if not zoneIP:
+                self.logger.error("❌ No zoneIP provided for sendSiriusXMChannel")
+                return
+
+            if not channel_guid:
+                self.logger.warning(f"⚠️ No SiriusXM GUID provided for zone {zoneIP}")
+                return
+
+            if not channel_name:
+                self.logger.warning(f"⚠️ No SiriusXM channel name provided for zone {zoneIP}")
 
             # Build HTML-safe encoded URI
             encoded_guid = urllib.parse.quote(channel_guid)
@@ -1797,9 +1837,9 @@ class SonosPlugin(object):
                 'SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;'
             )
 
-            self.logger.debug("📡 Sending SiriusXM stream to %s", zoneIP)
-            self.logger.debug("🔗 CurrentURI: %s", uri)
-            self.logger.debug("🧾 CurrentURIMetaData:\n%s", metadata)
+            self.logger.debug(f"📡 Sending SiriusXM stream to {zoneIP}")
+            self.logger.debug(f"🔗 CurrentURI: {uri}")
+            self.logger.debug(f"🧾 CurrentURIMetaData:\n{metadata}")
 
             # Set the stream URI
             self.SOAPSend(
@@ -1820,13 +1860,32 @@ class SonosPlugin(object):
                 "<Speed>1</Speed>"
             )
 
-
-
-
             self.logger.info(f"🎶 Sent SiriusXM channel {channel_name} to {zoneIP}")
+
+            # --- Save last known SiriusXM channel for the zoneIP ---
+            if not hasattr(self, "last_known_sxm_channel"):
+                self.last_known_sxm_channel = {}
+
+            # 🔎 Find channel number if possible from self.siriusxm_channels
+            matched_channel = next(
+                (ch for ch in self.siriusxm_channels if ch.get("guid", "").lower().strip() == channel_guid.lower().strip()),
+                None
+            )
+
+            if matched_channel:
+                ch_num = matched_channel.get("channel_number")
+                if ch_num:
+                    try:
+                        clean_ch_num = int(str(ch_num).strip())
+                        # We'll track by IP address here, not dev.id (because we don't have dev in this function)
+                        self.last_known_sxm_channel[zoneIP] = clean_ch_num
+                        self.logger.info(f"💾 Saved last known SiriusXM channel {clean_ch_num} for zone {zoneIP}")
+                    except Exception:
+                        self.logger.warning(f"⚠️ Could not parse channel_number for {zoneIP}")
 
         except Exception as e:
             self.logger.error(f"❌ Failed to send SiriusXM channel {channel_name}: {e}")
+
 
 
 
