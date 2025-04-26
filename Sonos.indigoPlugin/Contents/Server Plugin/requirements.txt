@@ -21,3 +21,6 @@ charset_normalizer==3.4.1
 incremental==24.7.2
 typing_extensions==4.13.0
 fake-useragent==1.5.1
+make_it_sync==2.0.0
+tenacity==3.2.0
+ua_parser==1.0.1
