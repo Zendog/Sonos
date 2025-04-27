@@ -7,6 +7,16 @@
 		tooltip="The ip address of the reference ZonePlayer">
         	<Label>Reference ZonePlayer IP:</Label>
         </Field>
+
+	<Field id="sonosTargetSubnet" type="textfield" defaultValue="192.168.80.0/24"
+	    tooltip="Specify the Sonos device network subnet in CIDR format, e.g., 192.168.2.0/24">
+	    <Label>Target Sonos Subnet (CIDR format):</Label>
+	</Field>
+
+
+
+
+        
     <Field id="simpleSeparator1" type="separator"/>
     <Field id="EventProcesssorNote" type="label" fontColor="darkgray" fontSize="small" alignWithControl="false">
     	<Label>Choose the event processor to listen for ZonePlayer changes.  SoCo is currently the only supported engine.  It will not not keep the UPNP discovery (1900) port open.</Label>

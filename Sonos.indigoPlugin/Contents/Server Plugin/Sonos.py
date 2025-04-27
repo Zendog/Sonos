@@ -7,10 +7,10 @@ import logging
 import platform
 import socket
 import traceback
-import netifaces
 import ipaddress
 import inspect
 import base64
+import ifaddr
 import re
 import requests
 import http.server as BaseHTTPServer
@@ -215,6 +215,8 @@ class SonosPlugin(object):
 
         self.plugin = plugin
         self.pluginPrefs = pluginPrefs  # ✅ Must be assigned first
+
+        self.targetSonosSubnet = self.pluginPrefs.get("sonosTargetSubnet", "192.168.80.0/24")
 
         self.logger = logging.getLogger("Plugin.Sonos")
         self.logger.info(f"Initializing SonosPlugin... [{uuid.uuid4()}]")
@@ -1999,23 +2001,6 @@ class SonosPlugin(object):
 
 
 
-    def find_sonos_interface_ip(self):
-        target_subnet = ipaddress.ip_network("192.168.80.0/24")
-        for interface in netifaces.interfaces():
-            try:
-                addrs = netifaces.ifaddresses(interface)
-                if netifaces.AF_INET in addrs:
-                    for addr in addrs[netifaces.AF_INET]:
-                        ip = ipaddress.ip_address(addr['addr'])
-                        if ip in target_subnet:
-                            self.logger.warning(f"✅ Selected interface {interface} with IP {ip} (matches target subnet)")
-                            soco.config.EVENT_LISTENER_IP = str(ip)
-                            return str(ip)
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed checking interface {interface}: {e}")
-        self.logger.warning("⚠️ No suitable interface found, using default EVENT_LISTENER_IP")
-
-
 
 ###############################################################################################################################
 
@@ -2685,23 +2670,27 @@ class SonosPlugin(object):
     ######################################################################################
 
 
-    def find_sonos_interface_ip(self, target_subnet="192.168.80.0/24"):
-        try:
-            target_net = ipaddress.IPv4Network(target_subnet)
-            self.logger.info(f"🔍 Searching for interface IP on subnet {target_subnet}...")
 
-            for iface in netifaces.interfaces():
-                try:
-                    iface_addrs = netifaces.ifaddresses(iface)
-                    inet_addrs = iface_addrs.get(netifaces.AF_INET, [])
-                    for addr in inet_addrs:
-                        ip = ipaddress.IPv4Address(addr['addr'])
-                        self.logger.info(f"   🧪 Interface {iface} has IP {ip}")
-                        if ip in target_net:
-                            self.logger.info(f"   ✅ Selected interface {iface} with IP {ip} (matches target subnet)")
-                            return str(ip)
-                except Exception as e:
-                    self.logger.warning(f"   ⚠️ Error checking interface {iface}: {e}")
+    def find_sonos_interface_ip(self, target_subnet=None):
+        try:
+            subnet_to_use = target_subnet or self.targetSonosSubnet or "192.168.80.0/24"
+            target_net = ipaddress.IPv4Network(subnet_to_use)
+            self.logger.info(f"🔍 Searching for interface IP on subnet {subnet_to_use}...")
+
+            adapters = ifaddr.get_adapters()
+            for adapter in adapters:
+                for ip_obj in adapter.ips:
+                    ip = ip_obj.ip
+                    if isinstance(ip, (list, tuple)):
+                        continue
+                    try:
+                        ip_addr = ipaddress.IPv4Address(ip)
+                        self.logger.info(f"   🧪 Interface {adapter.nice_name} has IP {ip_addr}")
+                        if ip_addr in target_net:
+                            self.logger.info(f"   ✅ Selected interface {adapter.nice_name} with IP {ip_addr} (matches target subnet)")
+                            return str(ip_addr)
+                    except ipaddress.AddressValueError:
+                        continue
 
             self.logger.warning("❌ No interface found on target Sonos subnet.")
             return None
@@ -2709,6 +2698,7 @@ class SonosPlugin(object):
             self.logger.error(f"Exception in find_sonos_interface_ip: {e}")
             return None
 
+            
 
 
 
