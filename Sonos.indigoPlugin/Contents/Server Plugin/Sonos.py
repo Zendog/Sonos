@@ -2575,7 +2575,7 @@ class SonosPlugin(object):
                     try:
                         from soco.events import event_listener
                         self.logger.info("🚀 Starting SoCo Event Listener...")
-                        soco.config.EVENT_LISTENER_IP = self.find_sonos_interface_ip("192.168.80.0/24")
+                        soco.config.EVENT_LISTENER_IP = self.find_sonos_interface_ip()
                         event_listener.start(any_zone=soco_device)
                         self.event_listener_started = True
                         self.logger.info(f"✅ SoCo Event Listener running: {event_listener.is_running}")
