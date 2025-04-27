@@ -10,6 +10,160 @@ import os
 import platform
 import sys
 import traceback
+import time
+# import aiohttp
+
+# =================== requirements.txt imports ==================
+import_errors = []
+try:
+    from twisted.internet import reactor
+    from twisted.internet.protocol import DatagramProtocol
+    from twisted.application.internet import MulticastServer
+except ImportError:
+    import_errors.append("twisted")
+
+try:
+    from gtts import gTTS
+except ImportError:
+    import_errors.append("gTTS")
+
+try:
+    import pyvona
+except ImportError:
+    import_errors.append("pyvona")
+
+try:
+    import boto3
+except ImportError:
+    import_errors.append("boto3")
+
+try:
+    from mutagen.mp3 import MP3
+    from mutagen.aiff import AIFF
+except ImportError:
+    import_errors.append("mutagen")
+
+try:
+    import urllib
+    import urllib.parse
+    from urllib.request import urlopen
+    import urllib.request
+except ImportError:
+    import_errors.append("urllib")
+
+# ============================== Custom Imports ===============================
+try:
+    # noinspection PyUnresolvedReferences
+    import indigo
+except ImportError:
+    pass
+
+from pandora import Pandora
+
+# ============================== Plugin Imports ===============================
+from constants import *
+
+from soco import SoCo
+
+
+indiPref_plugin_stopped = """<?xml version="1.0" encoding="UTF-8"?>
+<Prefs type="dict">
+    <plugin_stopped type="bool">true</plugin_stopped>
+</Prefs>
+
+"""
+
+
+class Plugin(indigo.PluginBase):
+
+
+    ######################################################################################
+    # class init & del
+    def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
+        indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
+
+        # Initialise dictionary to store plugin Globals
+        self.globals = dict()
+
+        self.Sonos = None
+        self.pluginPrefs = pluginPrefs
+
+        # Initialise Indigo plugin info
+        self.globals[PLUGIN_INFO] = {}
+        self.globals[PLUGIN_INFO][PLUGIN_ID] = pluginId
+        self.globals[PLUGIN_INFO][PLUGIN_DISPLAY_NAME] = pluginDisplayName
+        self.globals[PLUGIN_INFO][PLUGIN_VERSION] = pluginVersion
+        self.globals[PLUGIN_INFO][PATH] = indigo.server.getInstallFolderPath()
+        self.globals[PLUGIN_INFO][API_VERSION] = indigo.server.apiVersion
+        self.globals[PLUGIN_INFO][ADDRESS] = indigo.server.address
+
+        # Setup logging
+        log_format = logging.Formatter("%(asctime)s.%(msecs)03d\t%(levelname)-12s\t%(name)s.%(funcName)-25s %(msg)s", datefmt="%Y-%m-%d %H:%M:%S")
+        self.plugin_file_handler.setFormatter(log_format)
+        self.plugin_file_handler.setLevel(LOG_LEVEL_INFO)  # Logging Level for plugin log file
+        self.indigo_log_handler.setLevel(LOG_LEVEL_INFO)   # Logging level for Indigo Event Log
+
+        self.logger = logging.getLogger("Plugin.Sonos")
+        self.logger.info("Plugin logging now started.")
+
+        self.debug = False
+        self.xmlDebug = False
+        self.eventsDebug = False
+        self.stateUpdatesDebug = False
+        self.StopThread = False
+
+        # ✅ Instantiate SonosPlugin here
+        try:
+            from Sonos import SonosPlugin
+            self.Sonos = SonosPlugin(self, self.pluginPrefs)
+            # plugin.py
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize SonosPlugin: {e}")
+            self.Sonos = None
+
+        self.logger.info("Plugin __init__ ended.")
+
+        self.last_siriusxm_guid_by_dev = {}
+
+
+    def __del__(self):
+        indigo.PluginBase.__del__(self)
+
+    ######################################################################################
+
+
+###
+
+    def actionSetSiriusXMChannel(self, pluginAction, dev):
+        chan_id = pluginAction.props.get("channelSelector", "").strip()
+        self.logger.info(f"🎧 User selected SiriusXM channel ID: '{chan_id}'")
+
+        self.logger.debug(f"📦 Dumping {len(self.Sonos.siriusxm_channels)} SiriusXM channels from cache...")
+
+        for idx, ch in enumerate(self.Sonos.siriusxm_channels):
+            cid = ch.get("id", "")
+            num = ch.get("channelNumber", "")
+            name = ch.get("name", "")
+            stream = ch.get("streamUrl", "—")
+            self.logger.debug(f"🔎 [{idx}] id='{cid}' | number='{num}' | name='{name}' | streamUrl='{stream}'")
+
+        self.logger.debug("🧪 Skipping channel match and playback — this is a data dump only.")
+
+
+
+
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+
+
+# imports_successful = True
+
+# ============================== Native Imports ===============================
+import os
+import platform
+import sys
+import traceback
 # import aiohttp
 
 # =================== requirements.txt imports ==================

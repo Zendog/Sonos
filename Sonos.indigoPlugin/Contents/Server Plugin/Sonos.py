@@ -552,8 +552,8 @@ class SonosPlugin(object):
                 else:
                     self.logger.warning("⚠️ Pandora credentials incomplete — skipping reload.")
 
-            self.logger.warning(f"🧾 Known Sonos_Pandora entries: {Sonos_Pandora}")
-            self.logger.warning(f"🧾 Known Sonos_Pandora IDs: {[s[0] for s in Sonos_Pandora]}")
+            self.logger.debug(f"🧾 Known Sonos_Pandora entries: {Sonos_Pandora}")
+            self.logger.debug(f"🧾 Known Sonos_Pandora IDs: {[s[0] for s in Sonos_Pandora]}")
 
             # Retry lookup after fallback
             matching_station = next((s for s in Sonos_Pandora if s[0] == station_id), None)
