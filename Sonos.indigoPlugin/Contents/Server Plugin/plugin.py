@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 
+import subprocess
 
 # imports_successful = True
 
@@ -110,6 +111,8 @@ class Plugin(indigo.PluginBase):
         self.StopThread = False
 
 
+
+
         # ✅ Instantiate SonosPlugin here
         try:
             from Sonos import SonosPlugin
@@ -128,7 +131,6 @@ class Plugin(indigo.PluginBase):
     # plugin.py
     def getSiriusXMChannelList(self, filter="", valuesDict=None, typeId="", targetId=0):
         return self.Sonos.getSiriusXMChannelList(filter, valuesDict, typeId, targetId)
-
 
 
 
@@ -247,7 +249,6 @@ class Plugin(indigo.PluginBase):
 
 
 
-
     def startup(self):
         try:
             self.logger.info("Plugin startup started.")
@@ -262,8 +263,10 @@ class Plugin(indigo.PluginBase):
             self.logger.warning(f"🧪 Attempting to call deviceStartComm on object of type: {type(self.Sonos)}")
             self.logger.debug(f"🧪 Methods available: {dir(self.Sonos)}")
 
-            self.Sonos.startup()  # ✅ <-- This was commented out
+
+            self.Sonos.startup()  # ✅ <-- This was previously commented out but now active
             self.display_plugin_information()
+
             self.logger.info("Plugin startup ended.")
 
         except Exception as exception_error:
@@ -713,3 +716,7 @@ class Plugin(indigo.PluginBase):
 
     def getMicrosoftLanguages(self, filter="", valuesDict=None, typeId="", targetId=0):
         return self.Sonos.getMicrosoftLanguages()
+
+
+
+
