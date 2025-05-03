@@ -24,4 +24,12 @@
         <Name>Dump XM Channels to Log</Name>
         <CallbackMethod>menuDumpSiriusXMChannels</CallbackMethod>
     </MenuItem>
+
+
+
+    <MenuItem id="menuDumpGroups">
+        <Name>Dump Groups to Log</Name>
+        <CallbackMethod>menuDumpGroups</CallbackMethod>
+    </MenuItem>
+
 </MenuItems>

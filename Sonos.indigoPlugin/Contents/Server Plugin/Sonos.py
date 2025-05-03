@@ -3,6 +3,7 @@ import os
 import json
 import time
 import html
+import shutil
 import logging
 import threading
 import http.server
@@ -222,12 +223,15 @@ class SonosPlugin(object):
     ### Initialize the SonosPlugin
     ############################################################################################
 
+    # Define the class-level attribute
+    #DEFAULT_ARTWORK_PATH = '/Library/Application Support/Perceptive Automation/images/Sonos/'
+    DEFAULT_ARTWORK_PATH = '/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork copy.jpg'    
+
     def __init__(self, plugin, pluginPrefs):
         import uuid
         import os
         import json
         from sxm import SXMClient, RegionChoice, XMChannel
-
 
 
         self.httpd = None
@@ -2399,36 +2403,55 @@ class SonosPlugin(object):
         self.logger.info("🔌 Sonos Plugin Starting Up...")
 
 
-        # Cleanup old art before starting the server to reduce storage sized and keep things tidy
+
+        # Default image path in case artwork is missing from the stream
+        #DEFAULT_ARTWORK_PATH = '/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork copy.jpg'
+
+        # Ensure that the artwork folder exists for saving images
+        ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
+        os.makedirs(ARTWORK_FOLDER, exist_ok=True)
+
+
+        # Cleanup old art before starting the server to reduce storage size and keep things tidy
         self.cleanup_old_artwork()        
 
-        # ✅ Start the mini HTTP server for artwork
-        try:
-            import http.server
-            import socketserver
-            import threading
 
-            artwork_folder = "/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/"
-            port = 8888
+        # Function to start the HTTP server and serve images
+        def start_http_server():
+            try:
+                import http.server
+                import socketserver
+                import threading
 
-            class ArtworkHandler(http.server.SimpleHTTPRequestHandler):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, directory=artwork_folder, **kwargs)
+                # Set the artwork folder to be served
+                artwork_folder = "/Library/Application Support/Perceptive Automation/images/Sonos/"
+                port = 8888
 
-            # ✅ Pre-create a TCPServer that can reuse the socket
-            class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-                allow_reuse_address = True
+                # Handler class to serve files from the specified artwork folder
+                class ArtworkHandler(http.server.SimpleHTTPRequestHandler):
+                    def __init__(self, *args, **kwargs):
+                        super().__init__(*args, directory=artwork_folder, **kwargs)
 
-            self.httpd = ThreadedTCPServer(("", port), ArtworkHandler)
+                # Pre-create a TCPServer that can reuse the socket
+                class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+                    allow_reuse_address = True
 
-            self.server_thread = threading.Thread(target=self.httpd.serve_forever)
-            self.server_thread.daemon = True
-            self.server_thread.start()
+                # Create and start the server
+                httpd = ThreadedTCPServer(("", port), ArtworkHandler)
+                server_thread = threading.Thread(target=httpd.serve_forever)
+                server_thread.daemon = True
+                server_thread.start()
 
-            self.logger.info(f"🚀 Mini HTTP server started on http://localhost:{port}/ serving {artwork_folder}")
+                print(f"🚀 Mini HTTP server started on http://localhost:{port}/ serving {artwork_folder}")
 
-        except Exception as e:
-            self.logger.error(f"❌ Failed to start mini HTTP server: {e}")
+            except Exception as e:
+                print(f"DT - Failed to start mini HTTP server: {e}")
+
+        # Start the HTTP server
+        start_http_server()
+
+
+
 
         # 📥 Continue normal Sonos initialization
         try:
@@ -2857,15 +2880,14 @@ class SonosPlugin(object):
     #################################################################################################
 
 
-
     def soco_event_handler(self, event_obj):
         try:
-            # Get the zone_ip from the event object directly
+            # Get zone_ip
             zone_ip = getattr(event_obj, "zone_ip", None)
             if not zone_ip and hasattr(event_obj, "soco"):
                 zone_ip = getattr(event_obj.soco, "ip_address", None)
 
-            # Fallback: Find zone_ip from soco_subs mapping if not found in the event object
+            # Fallback: find zone_ip from subscription
             if not zone_ip:
                 for dev_id, subs in self.soco_subs.items():
                     if any(sub.sid == getattr(event_obj, "sid", None) for sub in subs.values()):
@@ -2891,7 +2913,7 @@ class SonosPlugin(object):
                 except Exception:
                     return ""
 
-            # Check if the event relates to any subscription and determine the device
+            # Find indigo device
             indigo_device = None
             for dev_id, subs in self.soco_subs.items():
                 if any(sub.sid == getattr(event_obj, "sid", None) for sub in subs.values()):
@@ -2910,7 +2932,7 @@ class SonosPlugin(object):
             for var, val in event_obj.variables.items():
                 self.safe_debug(f"   🖼️ {var} = {val}")
 
-            # Process transport state, volume, mute, bass, and treble
+            # Transport state, volume, mute, bass, treble
             if "transport_state" in event_obj.variables:
                 state_updates["ZP_STATE"] = event_obj.variables["transport_state"]
 
@@ -2979,66 +3001,85 @@ class SonosPlugin(object):
                     state_updates["ZP_ARTIST"] = self.last_siriusxm_artist_by_dev[dev_id]
                     self.safe_debug(f"🧪 Reusing last SiriusXM artist value")
 
-            # Now, update **only the device** that triggered the event
-            self.logger.debug(f"🖼️ Assigning album art for device {indigo_device.name} with IP {zone_ip}")
+            # NEW: Handle regular music metadata (non-SiriusXM)
+            if "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
+                try:
+                    track_title = safe_call(getattr(meta, "title", ""))
+                    track_artist = safe_call(getattr(meta, "artist", ""))
+                    track_album = safe_call(getattr(meta, "album", ""))
+                    if track_title:
+                        state_updates["ZP_TRACK"] = track_title
+                    if track_artist:
+                        state_updates["ZP_ARTIST"] = track_artist
+                    if track_album:
+                        state_updates["ZP_ALBUM"] = track_album
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
 
-            # Retrieve album art URI
-            meta = event_obj.variables.get("current_track_meta_data", None)
-            if meta:
-                album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
-                if album_art_uri:
-                    self.safe_debug(f"🖼️ Found album art URI: {album_art_uri}")
-                    # Process album art URI as needed
+            # Check if this device is the coordinator (master)
+            coordinator = self.getCoordinatorDevice(indigo_device)
+            is_master = (coordinator.address == indigo_device.address)
+
+            album_art_uri = ""
+            if is_master:
+                meta = event_obj.variables.get("current_track_meta_data", None)
+                if meta:
+                    album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
                     if album_art_uri.startswith("/"):
                         album_art_uri = f"http://{zone_ip}:1400{album_art_uri}"
 
-                    # If full URL, download and process
                     if album_art_uri.startswith("http://") or album_art_uri.startswith("https://"):
                         try:
                             response = requests.get(album_art_uri, timeout=5)
                             if response.status_code == 200:
-                                artwork_path = f"/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/sonos_art_{zone_ip}.jpg"
+                                artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
                                 with open(artwork_path, "wb") as f:
                                     f.write(response.content)
                                 album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                self.logger.info(f"🖼️ Updated album art URI for {zone_ip} to: {album_art_uri}")
+                                self.logger.info(f"🖼️ Updated album art URI for master {zone_ip} to: {album_art_uri}")
                             else:
                                 self.logger.warning(f"⚠️ Failed to download album art. Status code: {response.status_code}")
+                                album_art_uri = f"http://localhost:8888/default.jpg"
                         except Exception as e:
                             self.logger.error(f"❌ Error downloading album art: {e}")
+                            album_art_uri = f"http://localhost:8888/default.jpg"
                     else:
                         self.logger.warning(f"⚠️ Unexpected album_art_uri format: {album_art_uri}")
+                        album_art_uri = f"http://localhost:8888/default.jpg"
                 else:
-                    self.safe_debug(f"🖼️ No album_art_uri present in current_track_meta_data")
-                    album_art_uri = ""
+                    self.logger.warning(f"⚠️ No track metadata found for master {indigo_device.name}")
+                    album_art_uri = f"http://localhost:8888/default.jpg"
 
-                if album_art_uri:
-                    state_updates["ZP_ART"] = album_art_uri
-                else:
-                    state_updates["ZP_ART"] = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                    self.logger.debug(f"🖼️ Falling back to default image for {indigo_device.name}: {state_updates['ZP_ART']}")
+                # Store on coordinator
+                state_updates["ZP_ART"] = album_art_uri
 
             else:
-                self.logger.warning(f"⚠️ No track metadata found for {indigo_device.name}, skipping album art update.")
+                # Slaves copy from master (golden rule)
+                master_zone_ip = coordinator.address
+                album_art_uri = f"http://localhost:8888/sonos_art_{master_zone_ip}.jpg"
+                self.logger.info(f"🖼️ Slave {indigo_device.name} using master artwork: {album_art_uri}")
+                state_updates["ZP_ART"] = album_art_uri
 
-                
-
-
-
-
-            ###### End of art metadata processing block #####    
-
-                                
-
+            # Update device states
             if state_updates:
-                self.safe_debug(f"\ud83d\udce1 Updating {indigo_device.name} with state: {state_updates}")
+                self.safe_debug(f"🧑‍💻 Updating {indigo_device.name} with state: {state_updates}")
                 for k, v in state_updates.items():
+                    self.logger.debug(f"🧑‍💻 Updating {indigo_device.name} state {k} with value {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
+
+                # Replicate to slaves
+                if is_master:
+                    self.logger.info(f"🧪 Replicating state updates to slave devices in the group for {indigo_device.name}")
+                    self.updateStateOnSlaves(indigo_device)
             else:
-                self.safe_debug(f"\u26a0\ufe0f No recognized state updates for {indigo_device.name}")
+                self.safe_debug(f"⚠️ No recognized state updates for {indigo_device.name}")
 
         except Exception as e:
-            self.logger.error(f"\u274c Error in soco_event_handler: {e}")
+            self.logger.error(f"❌ Error in soco_event_handler: {e}")
+
+
+
 
 
 
@@ -3048,6 +3089,51 @@ class SonosPlugin(object):
     #################################################################################################
     ### End - Event Handler to process soco state changes and retreive current dynamic state updates
     #################################################################################################
+
+
+
+    def getSoCoDeviceByIP(self, ip_address):
+        """
+        Given an IP address, return the matching SoCo device object from known subscriptions.
+        """
+        try:
+            for dev_id, subs in self.soco_subs.items():
+                soco_obj = subs.get("soco")
+                if soco_obj and soco_obj.ip_address == ip_address:
+                    return soco_obj
+        except Exception as e:
+            self.logger.warning(f"⚠️ getSoCoDeviceByIP encountered an error: {e}")
+        return None
+
+
+
+    def getCoordinatorDevice(self, device):
+        """
+        Given an Indigo device, return the Indigo device object representing
+        the group coordinator (master) for that device's group.
+        If the device is the master, it returns itself.
+        """
+        try:
+            zone_ip = device.address
+            soco_device = self.getSoCoDeviceByIP(zone_ip)
+            if not soco_device:
+                self.logger.warning(f"⚠️ Could not resolve SoCo device for {device.name}")
+                return device  # fallback: treat self as coordinator
+
+            coordinator = soco_device.group.coordinator
+            coordinator_ip = coordinator.ip_address
+
+            # Find Indigo device matching the coordinator IP
+            for dev in indigo.devices.iter("self"):
+                if dev.address == coordinator_ip:
+                    return dev
+
+            self.logger.warning(f"⚠️ No Indigo device found matching coordinator IP {coordinator_ip}, returning self")
+            return device  # fallback: treat self as coordinator
+
+        except Exception as e:
+            self.logger.error(f"❌ Error in getCoordinatorDevice: {e}")
+            return device  # fallback: treat self as coordinator
 
 
 
@@ -3162,6 +3248,7 @@ class SonosPlugin(object):
                     dev.updateStateOnServer(state, value.encode('utf-8'))
                     # dev.updateStateOnServer(state, value)
 
+
             # Replicate states to slave ZonePlayers
             if state in ZoneGroupStates and dev.states['GROUP_Coordinator'] == "true" and dev.states['ZonePlayerUUIDsInGroup'].find(",") != -1:
                 self.safe_debug("Replicate state to slave ZonePlayers...")
@@ -3182,32 +3269,264 @@ class SonosPlugin(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
+
+
+
+    import shutil
+    import os
+
+
+    def dump_groups_to_log(self):
+        # Check if the SonosPlugin instance is properly initialized
+        if not self.soco_by_ip:
+            self.logger.warning("🚫 Sonos device map (soco_by_ip) is missing or not initialized.")
+            return
+
+        self.logger.info("📦 Dumping all currently grouped devices to the log...")
+
+        # Iterate over all the devices in the SoCo device map
+        seen_groups = set()  # To track already logged groups
+        for dev in self.soco_by_ip.values():
+            # Get the device IP
+            device_ip = dev.ip_address
+            # Retrieve the SoCo device object
+            soco_device = dev
+
+            # Ensure that the device has a valid group (and it is a coordinator or part of a group)
+            if soco_device.group is None:
+                self.logger.info(f"🧑‍💻 {dev.player_name} with IP {device_ip} is not part of any group.")
+                continue
+
+            # Check if the current device is the coordinator (master)
+            group = soco_device.group
+            coordinator = group.coordinator
+            role = "Master (Coordinator)" if soco_device == coordinator else "Slave"
+
+            # Avoid repeating the log for the same group
+            if group in seen_groups:
+                continue
+            seen_groups.add(group)
+
+            # List all devices in the group (including the master)
+            devices_in_group = group.members
+
+            # Add a space separator before the devices list and log the group details
+            self.logger.info("\n🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {[d.player_name for d in devices_in_group]}")
+
+            # Print header after the group devices list for each group
+            header = f"{'Device Name':<25} {'IP Address':<20} {'Role':<25} {'Indigo Device Name':<25} {'Indigo Device Number':<20}"
+            self.logger.info(header)
+            self.logger.info("=" * len(header))  # Print a separator line
+
+            # Iterate through all devices in the group and log their information
+            for rdev in devices_in_group:
+                # Check the role (Coordinator or Slave)
+                device_role = "Master (Coordinator)" if rdev == coordinator else "Slave"
+
+                # Fetch the corresponding Indigo device for the slave (by IP)
+                indigo_slave_device = None
+                for indigo_device in indigo.devices:
+                    if indigo_device.address == rdev.ip_address:
+                        indigo_slave_device = indigo_device
+                        break
+
+                # Log if no corresponding Indigo device is found
+                if not indigo_slave_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for slave device {rdev.player_name} with IP {rdev.ip_address}.")
+                else:
+                    # Format the row with more spacing and log it in a table format
+                    row = f"{rdev.player_name:<25} {rdev.ip_address:<20} {device_role:<25} {indigo_slave_device.name:<25} {indigo_slave_device.id:<20}"
+                    self.logger.info(row)
+
+    def logger_accumulator_matrix(self, master_device, master_file_path, slave_devices, artwork_url=None, default_artwork=False):
+        """
+        Accumulates and logs detailed artwork processing steps for master and slave devices.
+        
+        Args:
+            master_device (object): The master Sonos device.
+            master_file_path (str): Path to the saved master artwork.
+            slave_devices (list): List of slave devices to replicate artwork.
+            artwork_url (str, optional): URL of the artwork (if available). Defaults to None.
+            default_artwork (bool, optional): Flag to indicate if default artwork is used. Defaults to False.
+        """
+        
+        # Check if master_device is valid and set ip_address to "tbd" if missing
+        master_ip = getattr(master_device, 'ip_address', 'tbd')
+        master_name = getattr(master_device, 'name', 'tbd')
+        
+        # Check if artwork_url and master_file_path are valid, set them to "tbd" if missing
+        if not master_file_path:
+            master_file_path = 'tbd'
+        if not artwork_url:
+            artwork_url = 'tbd'
+
+        # Step 1: Log details about the stream file for the master device
+        self.logger.info(f"——————————————————————————————————————————————————————————————————————————————————")
+        self.logger.info(f"Stream file for the Master player {master_ip} (Name: {master_name}) art file was processed as art file name = {master_file_path} and stored in {master_file_path} as the base image.")
+        
+        # Step 2: Log the artwork saved as the master file
+        if artwork_url != 'tbd':
+            self.logger.info(f"This stream file was then saved in this directory - {master_file_path} with name= {master_ip} as the master file to be served")
+        else:
+            self.logger.info(f"Default artwork used. Master artwork saved in {master_file_path} for {master_ip}.")
+        
+        # Step 3: Log the artwork copied to each slave device
+        for slave_device in slave_devices:
+            # Set slave device info to "tbd" if missing
+            slave_ip = getattr(slave_device, 'ip_address', 'tbd')
+            slave_name = getattr(slave_device, 'name', 'tbd')
+            
+            # Use the correct path for slave artwork file
+            slave_file_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/{slave_ip}_art.jpg"
+            
+            if artwork_url != 'tbd':
+                self.logger.info(f"This master file was then copied to this directory - {slave_file_path} with name= {slave_ip} as the slave {slave_ip} file to be served")
+            else:
+                self.logger.info(f"Default artwork used. Master file copied to slave {slave_name} ({slave_ip}) at {slave_file_path}")
+        
+        # End of the matrix
+        self.logger.info(f"——————————————————————————————————————————————————————————————————————————————————")
+
+
+
+
+
+
+
+
+
     def updateStateOnSlaves(self, dev):
         try:
             self.safe_debug("Update all states to slave ZonePlayers...")
-            ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup']
-            for rdev in indigo.devices.iter("self.ZonePlayer"):
-                SlaveUID = rdev.states['ZP_LocalUID']
-                GROUP_Coordinator = rdev.states['GROUP_Coordinator']
-                # Do not update if you are yourself, not a slave, and not in the group
-                if SlaveUID != dev.states['ZP_LocalUID'] and GROUP_Coordinator == "false" and SlaveUID in ZonePlayerUUIDsInGroup:
-                    for state in list(ZoneGroupStates):
-                        if state == "ZP_CurrentURI":
-                            value = uri_group + dev.states['ZP_LocalUID']
-                        else:
-                            value = dev.states[state]
-                        if self.plugin.stateUpdatesDebug:
-                            self.safe_debug(f"\t Updating Slave Device: {rdev.name}, State: {state}, Value: {value}")
-                        rdev.updateStateOnServer(state, value)
-                    rdev.updateStateOnServer("ZP_ART", dev.states['ZP_ART'])
+
+            ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
+            DEFAULT_ARTWORK_PATH = ARTWORK_FOLDER + "default_artwork.jpg"
+            DEFAULT_ARTWORK_SOURCE = "/Library/Application Support/Perceptive Automation/Indigo 2024.2/Plugins/Sonos.indigoPlugin/Contents/Server Plugin/default_artwork.jpg"
+            MAX_DOWNLOAD_ATTEMPTS = 3
+
+            os.makedirs(ARTWORK_FOLDER, exist_ok=True)
+
+            # Ensure default artwork exists
+            if not os.path.exists(DEFAULT_ARTWORK_PATH):
+                try:
+                    shutil.copy(DEFAULT_ARTWORK_SOURCE, DEFAULT_ARTWORK_PATH)
+                    self.logger.info(f"✅ Default artwork copied to {DEFAULT_ARTWORK_PATH}")
+                except Exception as e:
+                    self.logger.error(f"❌ Failed to copy default artwork to {DEFAULT_ARTWORK_PATH}: {e}")
+
+            device_ip = dev.address.strip()
+            self.safe_debug(f"🧑‍💻 Device IP: {device_ip}")
+
+            if device_ip in self.soco_by_ip:
+                soco_device = self.soco_by_ip[device_ip]
+                self.safe_debug(f"🧑‍💻 Found SoCo device for {dev.name} with IP {device_ip}")
+            else:
+                self.logger.warning(f"⚠️ No SoCo device found for IP {device_ip}")
+                return
+
+            group = soco_device.group
+            coordinator = group.coordinator
+            devices_in_group = group.members
+            self.safe_debug(f"🧑‍💻 Devices in group: {[device.ip_address for device in devices_in_group]}")
+
+            coordinator_ip = coordinator.ip_address.strip()
+            coordinator_dev = None
+            for indigo_device in indigo.devices:
+                if indigo_device.address.strip() == coordinator_ip:
+                    coordinator_dev = indigo_device
+                    break
+
+            self.logger.warning(f"🧪 Coordinator resolved: {coordinator_dev.name if coordinator_dev else 'None'} at IP {coordinator_ip}")
+
+            master_artwork_file_path = None
+            artwork_url = coordinator_dev.states.get('ZP_ART', None) if coordinator_dev else None
+            self.logger.warning(f"🧪 Coordinator ZP_ART value: {artwork_url}")
+
+            if artwork_url and not artwork_url.endswith("default.jpg"):
+                for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
-                        shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg",
-                                     "/Library/Application Support/Perceptive Automation/images/Sonos/"+rdev.states['ZP_ZoneName']+"_art.jpg")
-                    except Exception as exception_error:
-                        pass
+                        response = requests.get(artwork_url, stream=True, timeout=5)
+                        self.logger.warning(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
+
+                        if response.status_code == 200:
+                            master_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{coordinator_dev.address}.jpg"
+                            with open(master_artwork_file_path, 'wb') as f:
+                                for chunk in response.iter_content(1024):
+                                    f.write(chunk)
+
+                            if os.path.exists(master_artwork_file_path):
+                                artwork_size = os.path.getsize(master_artwork_file_path)
+                                self.safe_debug(f"🖼️ Artwork saved on attempt {attempt} for master {coordinator_dev.name} at {master_artwork_file_path}, Size: {artwork_size} bytes")
+                                break
+                            else:
+                                self.logger.warning(f"⚠️ Artwork file not saved properly on attempt {attempt}")
+                        else:
+                            self.logger.warning(f"⚠️ Artwork download failed (status {response.status_code}) on attempt {attempt}")
+                    except Exception as e:
+                        self.logger.error(f"❌ Exception during artwork download attempt {attempt}: {e}")
+
+            if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
+                self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
+                master_artwork_file_path = DEFAULT_ARTWORK_PATH
+
+            for rdev in devices_in_group:
+                if rdev == coordinator:
+                    self.safe_debug(f"🧑‍💻 Skipping coordinator: {rdev.player_name} (IP: {rdev.ip_address})")
+                    continue
+
+                self.safe_debug(f"🧑‍💻 Processing slave: {rdev.player_name} (IP: {rdev.ip_address})")
+
+                indigo_slave_device = None
+                for indigo_device in indigo.devices:
+                    if indigo_device.address.strip() == rdev.ip_address.strip():
+                        indigo_slave_device = indigo_device
+                        break
+
+                if not indigo_slave_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for slave {rdev.player_name} with IP {rdev.ip_address}, skipping.")
+                    continue
+
+                for state in list(ZoneGroupStates):
+                    value = dev.states.get(state, "")
+                    self.safe_debug(f"🧑‍💻 Updating slave {indigo_slave_device.name}, State: {state}, Value: {value}")
+                    indigo_slave_device.updateStateOnServer(state, value)
+
+                try:
+                    slave_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{indigo_slave_device.address}.jpg"
+                    shutil.copy(master_artwork_file_path, slave_artwork_file_path)
+                    self.safe_debug(f"🖼️ Copied master artwork to slave {indigo_slave_device.name} at {slave_artwork_file_path}")
+                except Exception as e:
+                    self.logger.error(f"❌ Error copying artwork to slave {indigo_slave_device.name}: {e}")
+
+                indigo_slave_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_slave_device.address}.jpg")
+                self.logger.info(f"🧑‍💻 Successfully updated slave: {indigo_slave_device.name} with IP: {indigo_slave_device.address}")
 
         except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
+            self.exception_handler(exception_error, True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    import os
+    import shutil
+    import requests
+
 
     def copyStateFromMaster(self, dev):
         try:
@@ -3428,7 +3747,7 @@ class SonosPlugin(object):
         import os
         import time
 
-        artwork_dir = "/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/"
+        artwork_dir = "/Library/Application Support/Perceptive Automation/images/Sonos/"
         now = time.time()
         cutoff = now - (2 * 24 * 60 * 60)  # 2 days ago
 
@@ -4254,7 +4573,8 @@ class SiriusXM:
                                 try:
                                     response = requests.get(album_art_uri, timeout=5)
                                     if response.status_code == 200:
-                                        artwork_path = f"/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/sonos_art_{zone_ip}.jpg"
+                                        #artwork_path = f"/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/sonos_art_{zone_ip}.jpg"
+                                        artwork_path = "/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
                                         with open(artwork_path, "wb") as f:
                                             f.write(response.content)
                                         self.safe_debug(f"🖼️ Downloaded album art locally to {artwork_path}")

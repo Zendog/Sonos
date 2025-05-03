@@ -168,6 +168,17 @@ class Plugin(indigo.PluginBase):
 
 
 
+    def menuDumpGroups(self):
+        if not self.Sonos or not hasattr(self.Sonos, "dump_groups_to_log"):
+            self.logger.warning("🚫 Sonos instance or dump method is missing.")
+            return
+
+        self.logger.info("📦 Invoking Sonos → dump_groups_to_log()...")
+        self.Sonos.dump_groups_to_log()
+
+
+
+
     def menuDumpSiriusXMChannels(self):
         if not self.Sonos or not hasattr(self.Sonos, "dump_siriusxm_channels_to_log"):
             self.logger.warning("🚫 Sonos instance or dump method is missing.")
