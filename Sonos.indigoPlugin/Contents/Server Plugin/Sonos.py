@@ -2973,6 +2973,7 @@ class SonosPlugin(object):
                     self.safe_debug(f"🧪 Detected SiriusXM stream URI: {current_uri}")
 
             if is_siriusxm and "av_transport_uri_meta_data" in event_obj.variables:
+                self.logger.info(f"🧪 I am processing unique parameters for SirusXM selected stream - Yes?")
                 meta = event_obj.variables["av_transport_uri_meta_data"]
                 try:
                     title_raw = safe_call(getattr(meta, "title", ""))
@@ -3021,6 +3022,7 @@ class SonosPlugin(object):
                     self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
 
             # For Pandora, pull artist from enqueued_transport_uri_meta_data (station name)
+            self.logger.info(f"🧪 I am processing unique parameters for Pandora selected stream - Yes?")
             if current_uri and current_uri.startswith("x-sonosapi-radio:") and "enqueued_transport_uri_meta_data" in event_obj.variables:
                 meta = event_obj.variables["enqueued_transport_uri_meta_data"]
                 try:
@@ -3058,7 +3060,7 @@ class SonosPlugin(object):
                                 self.logger.warning(f"⚠️ Failed to download album art. Status code: {response.status_code}")
                                 album_art_uri = f"http://localhost:8888/default.jpg"
                         except Exception as e:
-                            self.logger.error(f"❌ Error downloading album art: {e}")
+                            self.logger.warning(f"⚠️ Warning code number 2 when downloading album art: {e}")
                             album_art_uri = f"http://localhost:8888/default.jpg"
                     else:
                         self.logger.warning(f"⚠️ Unexpected album_art_uri format: {album_art_uri}")
@@ -3396,17 +3398,18 @@ class SonosPlugin(object):
                     coordinator_dev = indigo_device
                     break
 
-            self.logger.warning(f"🧪 Coordinator resolved: {coordinator_dev.name if coordinator_dev else 'None'} at IP {coordinator_ip}")
+            self.logger.info(f"🧪 Coordinator resolved: {coordinator_dev.name if coordinator_dev else 'None'} at IP {coordinator_ip}")
 
             master_artwork_file_path = None
             artwork_url = coordinator_dev.states.get('ZP_ART', None) if coordinator_dev else None
-            self.logger.warning(f"🧪 Coordinator ZP_ART value: {artwork_url}")
+            self.logger.info(f"🧪 Coordinator ZP_ART value: {artwork_url}")
 
             if artwork_url and not artwork_url.endswith("default.jpg"):
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
                         response = requests.get(artwork_url, stream=True, timeout=10)
                         self.logger.warning(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
+                        time.sleep(1.5)
 
                         if response.status_code == 200:
                             master_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{coordinator_dev.address}.jpg"
@@ -3424,7 +3427,7 @@ class SonosPlugin(object):
                             self.logger.warning(f"⚠️ Artwork download failed (status {response.status_code}) on attempt {attempt}")
                     except Exception as e:
                         time.sleep(0.5)
-                        self.logger.error(f"❌ Exception during artwork download attempt {attempt}: {e}")
+                        self.logger.warning(f"⚠️ Exception during artwork download attempt {attempt}: {e}")
 
 
             if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
@@ -4456,103 +4459,3 @@ class SiriusXM:
             if x.get('name', '').lower() == name or x.get('channelId', '').lower() == name or x.get('siriusChannelNumber', '').lower() == name or x.get('channelGuid') == name:
                 return (x['channelGuid'], x['channelId'])
         return (None, None)
-
-
-
-
-
-    def process_album_art(self):
-        self.logger.info("🧪 Running dynamic album art processing based on active subscriptions...")
-
-        try:
-            if not self.soco_subs:
-                self.logger.warning("⚠️ No subscriptions found in self.soco_subs.")
-                return
-
-            # Iterate over all devices in self.soco_subs dynamically
-            for dev_id, subs in self.soco_subs.items():
-                try:
-                    indigo_device = indigo.devices[int(dev_id)]
-                    self.logger.info(f"🔍 Device: {indigo_device.name} ({indigo_device.address})")
-                except Exception:
-                    self.logger.warning(f"🔍 Device ID {dev_id} (not found in Indigo)")
-
-                if not subs:
-                    self.logger.warning("   ⚠️ No subscriptions registered for this device.")
-                    continue
-
-                # For each service (AVTransport, RenderingControl, etc.), process album art
-                for service_name, sub in subs.items():
-                    sid = getattr(sub, 'sid', 'no-sid')
-                    self.logger.info(f"   🔔 Processing service: {service_name} | SID: {sid}")
-
-                    # Retrieve player name and IP dynamically from subscription
-                    device_name = indigo_device.name if indigo_device else f"Unknown device ({dev_id})"
-                    zone_ip = indigo_device.address if indigo_device else "unknown"
-
-                    # Log the processing for the player
-                    self.safe_debug(f"🧪 Processing album art for player: {device_name} with IP: {zone_ip}")
-
-                    # Try to retrieve track metadata for album art processing
-                    meta = sub.variables.get("current_track_meta_data")  # Assuming `sub` has `variables` with track data
-                    if meta:
-                        self.safe_debug(f"🖼️ Found current_track_meta_data for player {device_name} — processing album art metadata.")
-                        state_updates["ZP_TRACK"] = safe_call(getattr(meta, "title", ""))
-                        state_updates["ZP_ARTIST"] = safe_call(getattr(meta, "creator", ""))
-                        state_updates["ZP_ALBUM"] = safe_call(getattr(meta, "album", ""))
-                        state_updates["ZP_DURATION"] = safe_call(getattr(meta, "duration", ""))
-
-                        album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
-                        if album_art_uri:
-                            self.safe_debug(f"🖼️ Found album art URI for {device_name}: {album_art_uri}")
-                            if album_art_uri.startswith("/"):
-                                if zone_ip != "unknown":
-                                    album_art_uri = f"http://{zone_ip}:1400{album_art_uri}"
-                                    self.safe_debug(f"🖼️ Built album art URL using zone_ip: {album_art_uri}")
-                                else:
-                                    self.logger.warning("⚠️ Skipping album art URL generation — zone_ip unknown")
-                                    album_art_uri = ""
-                            elif album_art_uri.startswith("http://") or album_art_uri.startswith("https://"):
-                                self.safe_debug(f"🖼️ Received full album art URL: {album_art_uri}")
-                                # ✅ Attempt to download and localize
-                                try:
-                                    response = requests.get(album_art_uri, timeout=5)
-                                    if response.status_code == 200:
-                                        #artwork_path = f"/Library/Application Support/Perceptive Automation/Indigo 2024.2/IndigoWebServer/images/sonos_art_{zone_ip}.jpg"
-                                        artwork_path = "/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
-                                        with open(artwork_path, "wb") as f:
-                                            f.write(response.content)
-                                        self.safe_debug(f"🖼️ Downloaded album art locally to {artwork_path}")
-                                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                        self.logger.info(f"🖼️ Updated album art URI to: {album_art_uri}")
-                                    else:
-                                        self.logger.warning(f"⚠️ Failed to download album art. Status code: {response.status_code}")
-                                except Exception as e:
-                                    self.logger.error(f"❌ Error downloading album art: {e}")
-                            else:
-                                self.logger.warning(f"⚠️ Unexpected album_art_uri format: {album_art_uri} — clearing")
-                                album_art_uri = ""
-                        else:
-                            self.safe_debug(f"🖼️ No album_art_uri present in current_track_meta_data")
-
-                        if album_art_uri:
-                            self.logger.debug(f"🖼️ Assigning album art for {device_name} — URL: {album_art_uri}")
-                            state_updates["ZP_ART"] = album_art_uri
-                        else:
-                            self.safe_debug(f"🖼️ Skipping ZP_ART update — no valid album art URL for {device_name}")
-                            # Fallback image
-                            state_updates["ZP_ART"] = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                            self.logger.debug(f"🖼️ Falling back to default image for {device_name}: {state_updates['ZP_ART']}")
-
-                        state_updates["ZP_CurrentTrackURI"] = safe_call(getattr(meta, "uri", ""))
-                    else:
-                        self.logger.warning(f"⚠️ No current_track_meta_data or current_track found for {device_name} — no album art to process.")
-                        # 🛡️ After everything, guarantee a valid ZP_ART even if missing
-                        if not state_updates.get("ZP_ART"):
-                            self.logger.warning(f"🖼️ No album art URI found for {device_name} — setting default placeholder")
-                            state_updates["ZP_ART"] = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-
-        except Exception as e:
-            self.logger.error(f"❌ Error during dynamic album art processing: {e}")
-
-        
