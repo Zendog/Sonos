@@ -2990,6 +2990,9 @@ class SonosPlugin(object):
                     if name_part:
                         state_updates["ZP_ARTIST"] = name_part
                         self.last_siriusxm_artist_by_dev[dev_id] = name_part
+
+                    # Explicitly clear album when SiriusXM has no album data
+                    state_updates["ZP_ALBUM"] = ""
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse SiriusXM av_transport_uri_meta_data: {e}")
 
@@ -3016,6 +3019,19 @@ class SonosPlugin(object):
                         state_updates["ZP_ALBUM"] = track_album
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
+
+            # For Pandora, pull artist from enqueued_transport_uri_meta_data (station name)
+            if current_uri and current_uri.startswith("x-sonosapi-radio:") and "enqueued_transport_uri_meta_data" in event_obj.variables:
+                meta = event_obj.variables["enqueued_transport_uri_meta_data"]
+                try:
+                    station_title = safe_call(getattr(meta, "title", ""))
+                    if station_title.endswith(" (My Station)"):
+                        station_title = station_title.replace(" (My Station)", "").strip()
+                    if station_title:
+                        state_updates["ZP_ARTIST"] = station_title
+                        self.safe_debug(f"📻 Extracted Pandora station name for artist: {station_title}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to parse enqueued_transport_uri_meta_data for Pandora: {e}")
 
             # Check if this device is the coordinator (master)
             coordinator = self.getCoordinatorDevice(indigo_device)
@@ -3085,7 +3101,6 @@ class SonosPlugin(object):
 
 
 
-
     #################################################################################################
     ### End - Event Handler to process soco state changes and retreive current dynamic state updates
     #################################################################################################
@@ -3117,7 +3132,7 @@ class SonosPlugin(object):
             zone_ip = device.address
             soco_device = self.getSoCoDeviceByIP(zone_ip)
             if not soco_device:
-                self.logger.warning(f"⚠️ Could not resolve SoCo device for {device.name}")
+                self.logger.warning(f"⚠️ Fallback - Assumed group coordinator SoCo device for {device.name}")
                 return device  # fallback: treat self as coordinator
 
             coordinator = soco_device.group.coordinator
@@ -3338,61 +3353,6 @@ class SonosPlugin(object):
                     row = f"{rdev.player_name:<25} {rdev.ip_address:<20} {device_role:<25} {indigo_slave_device.name:<25} {indigo_slave_device.id:<20}"
                     self.logger.info(row)
 
-    def logger_accumulator_matrix(self, master_device, master_file_path, slave_devices, artwork_url=None, default_artwork=False):
-        """
-        Accumulates and logs detailed artwork processing steps for master and slave devices.
-        
-        Args:
-            master_device (object): The master Sonos device.
-            master_file_path (str): Path to the saved master artwork.
-            slave_devices (list): List of slave devices to replicate artwork.
-            artwork_url (str, optional): URL of the artwork (if available). Defaults to None.
-            default_artwork (bool, optional): Flag to indicate if default artwork is used. Defaults to False.
-        """
-        
-        # Check if master_device is valid and set ip_address to "tbd" if missing
-        master_ip = getattr(master_device, 'ip_address', 'tbd')
-        master_name = getattr(master_device, 'name', 'tbd')
-        
-        # Check if artwork_url and master_file_path are valid, set them to "tbd" if missing
-        if not master_file_path:
-            master_file_path = 'tbd'
-        if not artwork_url:
-            artwork_url = 'tbd'
-
-        # Step 1: Log details about the stream file for the master device
-        self.logger.info(f"——————————————————————————————————————————————————————————————————————————————————")
-        self.logger.info(f"Stream file for the Master player {master_ip} (Name: {master_name}) art file was processed as art file name = {master_file_path} and stored in {master_file_path} as the base image.")
-        
-        # Step 2: Log the artwork saved as the master file
-        if artwork_url != 'tbd':
-            self.logger.info(f"This stream file was then saved in this directory - {master_file_path} with name= {master_ip} as the master file to be served")
-        else:
-            self.logger.info(f"Default artwork used. Master artwork saved in {master_file_path} for {master_ip}.")
-        
-        # Step 3: Log the artwork copied to each slave device
-        for slave_device in slave_devices:
-            # Set slave device info to "tbd" if missing
-            slave_ip = getattr(slave_device, 'ip_address', 'tbd')
-            slave_name = getattr(slave_device, 'name', 'tbd')
-            
-            # Use the correct path for slave artwork file
-            slave_file_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/{slave_ip}_art.jpg"
-            
-            if artwork_url != 'tbd':
-                self.logger.info(f"This master file was then copied to this directory - {slave_file_path} with name= {slave_ip} as the slave {slave_ip} file to be served")
-            else:
-                self.logger.info(f"Default artwork used. Master file copied to slave {slave_name} ({slave_ip}) at {slave_file_path}")
-        
-        # End of the matrix
-        self.logger.info(f"——————————————————————————————————————————————————————————————————————————————————")
-
-
-
-
-
-
-
 
 
     def updateStateOnSlaves(self, dev):
@@ -3445,7 +3405,7 @@ class SonosPlugin(object):
             if artwork_url and not artwork_url.endswith("default.jpg"):
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
-                        response = requests.get(artwork_url, stream=True, timeout=5)
+                        response = requests.get(artwork_url, stream=True, timeout=10)
                         self.logger.warning(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
 
                         if response.status_code == 200:
@@ -3463,7 +3423,9 @@ class SonosPlugin(object):
                         else:
                             self.logger.warning(f"⚠️ Artwork download failed (status {response.status_code}) on attempt {attempt}")
                     except Exception as e:
+                        time.sleep(0.5)
                         self.logger.error(f"❌ Exception during artwork download attempt {attempt}: {e}")
+
 
             if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
                 self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
@@ -3503,23 +3465,6 @@ class SonosPlugin(object):
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
