@@ -12,5 +12,5 @@ This version (1.0.2):
 10. Implemented Pandora login and channel processing.
 11. Added additional modules to requirements.txt.
 12. Added Artwork / Metadata server.
-13. Added menu option for group device inventory / Master Controller identification to the log.
+13. Added menu option for dumping group device inventory / master controller identification to the log (matrixed Sonos SOCO Name / IP ADDRESS / Indigo Name / Indigo Device ID) for device management insight clarification.
 14. Updated group controls to copy master controller enriched metadata states to all associated devices in the current device grouping.
