@@ -2,7 +2,7 @@
 This version (1.0.2):
 1. Updated soco library to - 0.30.9 for better control function support and overall stability.
 2. Rewrote and fixed subscription services, includes fallback subscription upon failure to address devices falling of network.
-3. Added menu option for dumping subscribed devices to the log as diagnostic aid on subscripition failures
+3. Added menu option for dumping subscribed devices to the log as diagnostic aid on subscripition failures.
 4. Rewrote discover to facilitate VLAN access for dedicated SONOS VLAN network access and control.
 5. Rewrote and corrected volume controls.
 6. Rewrote and corrected Bass and Treble controls.
