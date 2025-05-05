@@ -2880,14 +2880,19 @@ class SonosPlugin(object):
     #################################################################################################
 
 
+
+
+
+
+
+    import os
+
     def soco_event_handler(self, event_obj):
         try:
-            # Get zone_ip
             zone_ip = getattr(event_obj, "zone_ip", None)
             if not zone_ip and hasattr(event_obj, "soco"):
                 zone_ip = getattr(event_obj.soco, "ip_address", None)
 
-            # Fallback: find zone_ip from subscription
             if not zone_ip:
                 for dev_id, subs in self.soco_subs.items():
                     if any(sub.sid == getattr(event_obj, "sid", None) for sub in subs.values()):
@@ -2913,7 +2918,6 @@ class SonosPlugin(object):
                 except Exception:
                     return ""
 
-            # Find indigo device
             indigo_device = None
             for dev_id, subs in self.soco_subs.items():
                 if any(sub.sid == getattr(event_obj, "sid", None) for sub in subs.values()):
@@ -2932,7 +2936,6 @@ class SonosPlugin(object):
             for var, val in event_obj.variables.items():
                 self.safe_debug(f"   🖼️ {var} = {val}")
 
-            # Transport state, volume, mute, bass, treble
             if "transport_state" in event_obj.variables:
                 state_updates["ZP_STATE"] = event_obj.variables["transport_state"]
 
@@ -2960,7 +2963,6 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Invalid treble value: {event_obj.variables['treble']} — {e}")
 
-            # Handle track URI and SiriusXM
             current_uri = (
                 event_obj.variables.get("current_track_uri") or
                 event_obj.variables.get("enqueued_transport_uri") or
@@ -2970,8 +2972,10 @@ class SonosPlugin(object):
                 state_updates["ZP_CurrentTrackURI"] = current_uri
                 if current_uri.startswith("x-sonosapi-hls:channel-linear"):
                     is_siriusxm = True
+                    self.logger.info(f"🧪 I tested for SirusXM selected stream and belive we are processing a XM stream - Yes?")
                     self.safe_debug(f"🧪 Detected SiriusXM stream URI: {current_uri}")
 
+            meta = None
             if is_siriusxm and "av_transport_uri_meta_data" in event_obj.variables:
                 self.logger.info(f"🧪 I am processing unique parameters for SirusXM selected stream - Yes?")
                 meta = event_obj.variables["av_transport_uri_meta_data"]
@@ -2992,7 +2996,6 @@ class SonosPlugin(object):
                         state_updates["ZP_ARTIST"] = name_part
                         self.last_siriusxm_artist_by_dev[dev_id] = name_part
 
-                    # Explicitly clear album when SiriusXM has no album data
                     state_updates["ZP_ALBUM"] = ""
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse SiriusXM av_transport_uri_meta_data: {e}")
@@ -3005,7 +3008,6 @@ class SonosPlugin(object):
                     state_updates["ZP_ARTIST"] = self.last_siriusxm_artist_by_dev[dev_id]
                     self.safe_debug(f"🧪 Reusing last SiriusXM artist value")
 
-            # NEW: Handle regular music metadata (non-SiriusXM)
             if "current_track_meta_data" in event_obj.variables:
                 meta = event_obj.variables["current_track_meta_data"]
                 try:
@@ -3021,9 +3023,8 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
 
-            # For Pandora, pull artist from enqueued_transport_uri_meta_data (station name)
-            self.logger.info(f"🧪 I am processing unique parameters for Pandora selected stream - Yes?")
             if current_uri and current_uri.startswith("x-sonosapi-radio:") and "enqueued_transport_uri_meta_data" in event_obj.variables:
+                self.logger.info(f"🧪 I am processing unique parameters for Pandora selected stream - Yes?")
                 meta = event_obj.variables["enqueued_transport_uri_meta_data"]
                 try:
                     station_title = safe_call(getattr(meta, "title", ""))
@@ -3035,13 +3036,50 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse enqueued_transport_uri_meta_data for Pandora: {e}")
 
-            # Check if this device is the coordinator (master)
+            if not is_siriusxm and not (current_uri and current_uri.startswith("x-sonosapi-radio:")) and meta:
+                self.logger.info(f"🧪 Processing non-XM, non-Pandora default streaming metadata")
+                self.logger.info(f"📦 Full raw meta object: {repr(meta)}")
+                self.logger.info(f"📦 Meta extra attributes: {getattr(meta, 'extra_attributes', {})}")
+                try:
+                    track_title = safe_call(getattr(meta, "title", ""))
+                    track_artist = (
+                        safe_call(getattr(meta, "artist", "")) or
+                        safe_call(getattr(meta, "creator", "")) or
+                        safe_call(getattr(meta, "author", "")) or
+                        safe_call(getattr(meta, "performer", "")) or
+                        (meta.extra_attributes.get("upnp:artist", "") if hasattr(meta, "extra_attributes") else "")
+                    )
+                    track_album = safe_call(getattr(meta, "album", ""))
+                    self.logger.info(f"🎵 Raw extracted values -> Title: '{track_title}', Artist: '{track_artist}', Album: '{track_album}'")
+                    if track_title:
+                        state_updates["ZP_TRACK"] = track_title
+                    if track_artist:
+                        state_updates["ZP_ARTIST"] = track_artist
+                    else:
+                        fallback_artist = "[Unknown Artist]"
+                        self.logger.warning(f"⚠️ Artist metadata missing — using fallback: {fallback_artist}")
+                        state_updates["ZP_ARTIST"] = fallback_artist
+                    if track_album:
+                        state_updates["ZP_ALBUM"] = track_album
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to extract default streaming metadata: {e}")
+
             coordinator = self.getCoordinatorDevice(indigo_device)
             is_master = (coordinator.address == indigo_device.address)
+
+
+
+
+
+            import shutil  # make sure this is at the top of your file
 
             album_art_uri = ""
             if is_master:
                 meta = event_obj.variables.get("current_track_meta_data", None)
+                artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
+                default_path = "/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork.jpg"
+                max_allowed_size = 600_000  # 600 KB
+
                 if meta:
                     album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
                     if album_art_uri.startswith("/"):
@@ -3051,42 +3089,111 @@ class SonosPlugin(object):
                         try:
                             response = requests.get(album_art_uri, timeout=5)
                             if response.status_code == 200:
-                                artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
-                                with open(artwork_path, "wb") as f:
-                                    f.write(response.content)
-                                album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                self.logger.info(f"🖼️ Updated album art URI for master {zone_ip} to: {album_art_uri}")
+                                img_data = response.content
+                                if len(img_data) > max_allowed_size:
+                                    self.logger.warning(f"⚠️ Artwork too large in download ({len(img_data)} bytes) for {zone_ip}, replacing with default image.")
+                                    if os.path.exists(artwork_path):
+                                        try:
+                                            os.remove(artwork_path)
+                                            self.logger.info(f"🗑️ Removed old oversized artwork file at {artwork_path}")
+                                        except Exception as cleanup_err:
+                                            self.logger.warning(f"⚠️ Failed to remove old oversized artwork: {cleanup_err}")
+                                    if os.path.exists(default_path):
+                                        try:
+                                            shutil.copyfile(default_path, artwork_path)
+                                            self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                                        except Exception as copy_err:
+                                            self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                                    else:
+                                        self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                                else:
+                                    with open(artwork_path, "wb") as f:
+                                        f.write(img_data)
+                                    actual_size = os.path.getsize(artwork_path)
+                                    if actual_size > max_allowed_size:
+                                        self.logger.warning(f"⚠️ Saved artwork file too large on disk ({actual_size} bytes) for {zone_ip}, replacing with default image.")
+                                        try:
+                                            os.remove(artwork_path)
+                                            self.logger.info(f"🗑️ Removed oversized saved artwork at {artwork_path}")
+                                        except Exception as cleanup_err:
+                                            self.logger.warning(f"⚠️ Failed to remove oversized artwork file: {cleanup_err}")
+                                        if os.path.exists(default_path):
+                                            try:
+                                                shutil.copyfile(default_path, artwork_path)
+                                                self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                                            except Exception as copy_err:
+                                                self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                                        else:
+                                            self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                                    else:
+                                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                                        self.logger.info(f"🖼️ Updated album art URI for master {zone_ip} to: {album_art_uri}")
                             else:
                                 self.logger.warning(f"⚠️ Failed to download album art. Status code: {response.status_code}")
-                                album_art_uri = f"http://localhost:8888/default.jpg"
+                                if os.path.exists(default_path):
+                                    try:
+                                        shutil.copyfile(default_path, artwork_path)
+                                        self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                                    except Exception as copy_err:
+                                        self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                                else:
+                                    self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                                album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                         except Exception as e:
-                            self.logger.warning(f"⚠️ Warning code number 2 when downloading album art: {e}")
-                            album_art_uri = f"http://localhost:8888/default.jpg"
+                            self.logger.warning(f"⚠️ Exception when downloading album art: {e}")
+                            if os.path.exists(default_path):
+                                try:
+                                    shutil.copyfile(default_path, artwork_path)
+                                    self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                                except Exception as copy_err:
+                                    self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                            else:
+                                self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                            album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                     else:
                         self.logger.warning(f"⚠️ Unexpected album_art_uri format: {album_art_uri}")
-                        album_art_uri = f"http://localhost:8888/default.jpg"
+                        if os.path.exists(default_path):
+                            try:
+                                shutil.copyfile(default_path, artwork_path)
+                                self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                            except Exception as copy_err:
+                                self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                        else:
+                            self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                 else:
                     self.logger.warning(f"⚠️ No track metadata found for master {indigo_device.name}")
-                    album_art_uri = f"http://localhost:8888/default.jpg"
+                    if os.path.exists(default_path):
+                        try:
+                            shutil.copyfile(default_path, artwork_path)
+                            self.logger.info(f"📋 Copied default image over to {artwork_path}")
+                        except Exception as copy_err:
+                            self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
+                    else:
+                        self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
 
-                # Store on coordinator
                 state_updates["ZP_ART"] = album_art_uri
-
             else:
-                # Slaves copy from master (golden rule)
                 master_zone_ip = coordinator.address
                 album_art_uri = f"http://localhost:8888/sonos_art_{master_zone_ip}.jpg"
                 self.logger.info(f"🖼️ Slave {indigo_device.name} using master artwork: {album_art_uri}")
                 state_updates["ZP_ART"] = album_art_uri
 
-            # Update device states
+    
+
+
+
+
+
             if state_updates:
                 self.safe_debug(f"🧑‍💻 Updating {indigo_device.name} with state: {state_updates}")
                 for k, v in state_updates.items():
                     self.logger.debug(f"🧑‍💻 Updating {indigo_device.name} state {k} with value {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
-                # Replicate to slaves
                 if is_master:
                     self.logger.info(f"🧪 Replicating state updates to slave devices in the group for {indigo_device.name}")
                     self.updateStateOnSlaves(indigo_device)
@@ -3095,9 +3202,6 @@ class SonosPlugin(object):
 
         except Exception as e:
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
-
-
-
 
 
 
