@@ -1,7 +1,6 @@
 boto3==1.34.9
 gTTS==2.5.0
 ifaddr==0.2.0
-lxml==5.1.0
 mutagen==1.47.0
 pyvona==1.2.1
 Twisted==24.11.0
