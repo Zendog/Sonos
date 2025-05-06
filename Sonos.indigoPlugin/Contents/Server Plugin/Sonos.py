@@ -2881,11 +2881,9 @@ class SonosPlugin(object):
 
 
 
-
-
-
-
     import os
+    import shutil
+    import requests
 
     def soco_event_handler(self, event_obj):
         try:
@@ -2929,13 +2927,99 @@ class SonosPlugin(object):
                 return
 
             dev_id = indigo_device.id
-            current_uri = None
-            is_siriusxm = False
+            current_uri = (
+                event_obj.variables.get("current_track_uri") or
+                event_obj.variables.get("enqueued_transport_uri") or
+                event_obj.variables.get("av_transport_uri")
+            )
 
-            self.safe_debug(f"🧪 Event received from SID {event_obj.sid} | Seq: {event_obj.seq}")
-            for var, val in event_obj.variables.items():
-                self.safe_debug(f"   🖼️ {var} = {val}")
+            uri_priority = [
+                ("enqueued_transport_uri", event_obj.variables.get("enqueued_transport_uri", "")),
+                ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
+                ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
+            ]
 
+            # Meta debug dump
+            if "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
+                try:
+                    if hasattr(meta, 'to_dict'):
+                        meta_dict = meta.to_dict()
+                        self.logger.warning(f"🔍 [Apple Debug] bobbing for apples - current_track_meta_data.to_dict(): {meta_dict}")
+
+                    track_title = safe_call(getattr(meta, "title", ""))
+                    track_artist = safe_call(getattr(meta, "artist", ""))
+                    track_album = safe_call(getattr(meta, "album", ""))
+                    if track_title:
+                        state_updates.setdefault("ZP_TRACK", track_title)
+                    if track_artist:
+                        state_updates.setdefault("ZP_ARTIST", track_artist)
+                    if track_album:
+                        state_updates.setdefault("ZP_ALBUM", track_album)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
+
+
+            self.safe_debug("🧪 Prioritized source detection order:")
+            detected_source = None
+
+            for name, uri in uri_priority:
+                self.safe_debug(f"   {name}: {uri}")
+                if "x-sonosapi-hls:channel-linear" in uri:
+                    detected_source = "SiriusXM"
+                    self.safe_debug(f"✅ Detected SiriusXM from {name}")
+                    break
+                elif "x-sonosapi-radio:" in uri or "VC1%3a%3aST%3a%3aST%3a" in uri:
+                    detected_source = "Pandora"
+                    self.safe_debug(f"✅ Detected Pandora from {name}")
+                    break
+                elif "x-apple-music:" in uri:
+                    detected_source = "Apple Music"
+                    self.safe_debug(f"✅ Detected Apple Music from {name}")
+                    break
+                elif "x-sonosapi-stream:" in uri:
+                    detected_source = "Sonos Radio"
+                    self.safe_debug(f"✅ Detected Sonos Radio from {name}")
+                    break
+                elif "x-sonos-http:librarytrack" in uri and "service_id" == "Apple":
+                    detected_source = "Apple Music"
+                    self.safe_debug(f"✅ Detected Apple Music from legacy Sonos HTTP librarytrack")
+                    break
+
+            # 🔴 INSERT APPLE MUSIC METADATA CHECK BEFORE DEFAULT FALLBACK
+            if not detected_source and "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
+                try:
+                    if hasattr(meta, "to_dict"):
+                        meta_dict = meta.to_dict()
+                        resources = meta_dict.get("resources", [])
+                        if resources:
+                            resource = resources[0]
+                            uri = resource.get("uri", "")
+                            protocol = resource.get("protocol_info", "")
+                            if ".mp4" in uri and "audio/mp4" in protocol:
+                                detected_source = "Apple Music"
+                                self.safe_debug("✅ Detected Apple Music from resource URI and protocol_info")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed during Apple Music metadata fallback detection: {e}")
+
+            # FINAL FALLBACK
+            if not detected_source:
+                detected_source = "Sonos"
+                self.safe_debug("⚠️ No known source matched — defaulting to Sonos")
+
+
+    
+
+
+            state_updates["ZP_SOURCE"] = detected_source
+            is_siriusxm = (detected_source == "SiriusXM")
+            is_pandora = (detected_source == "Pandora")
+            is_apple_music = (detected_source == "Apple Music")
+            is_sonos_radio = (detected_source == "Sonos Radio")
+            is_sonos = (detected_source == "Sonos")
+
+            # Transport, volume, mute, bass, treble
             if "transport_state" in event_obj.variables:
                 state_updates["ZP_STATE"] = event_obj.variables["transport_state"]
 
@@ -2963,21 +3047,8 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Invalid treble value: {event_obj.variables['treble']} — {e}")
 
-            current_uri = (
-                event_obj.variables.get("current_track_uri") or
-                event_obj.variables.get("enqueued_transport_uri") or
-                event_obj.variables.get("av_transport_uri")
-            )
-            if current_uri:
-                state_updates["ZP_CurrentTrackURI"] = current_uri
-                if current_uri.startswith("x-sonosapi-hls:channel-linear"):
-                    is_siriusxm = True
-                    self.logger.info(f"🧪 I tested for SirusXM selected stream and belive we are processing a XM stream - Yes?")
-                    self.safe_debug(f"🧪 Detected SiriusXM stream URI: {current_uri}")
-
-            meta = None
+            # SiriusXM handling
             if is_siriusxm and "av_transport_uri_meta_data" in event_obj.variables:
-                self.logger.info(f"🧪 I am processing unique parameters for SirusXM selected stream - Yes?")
                 meta = event_obj.variables["av_transport_uri_meta_data"]
                 try:
                     title_raw = safe_call(getattr(meta, "title", ""))
@@ -2997,34 +3068,17 @@ class SonosPlugin(object):
                         self.last_siriusxm_artist_by_dev[dev_id] = name_part
 
                     state_updates["ZP_ALBUM"] = ""
+                    self.safe_debug(f"🎶 SiriusXM parsed: track={ch_part}, artist={name_part}")
                 except Exception as e:
-                    self.logger.warning(f"⚠️ Failed to parse SiriusXM av_transport_uri_meta_data: {e}")
+                    self.logger.warning(f"⚠️ Failed to parse SiriusXM metadata: {e}")
 
-            if is_siriusxm:
                 if "ZP_TRACK" not in state_updates and dev_id in self.last_siriusxm_track_by_dev:
                     state_updates["ZP_TRACK"] = self.last_siriusxm_track_by_dev[dev_id]
-                    self.safe_debug(f"🧪 Reusing last SiriusXM track value")
                 if "ZP_ARTIST" not in state_updates and dev_id in self.last_siriusxm_artist_by_dev:
                     state_updates["ZP_ARTIST"] = self.last_siriusxm_artist_by_dev[dev_id]
-                    self.safe_debug(f"🧪 Reusing last SiriusXM artist value")
 
-            if "current_track_meta_data" in event_obj.variables:
-                meta = event_obj.variables["current_track_meta_data"]
-                try:
-                    track_title = safe_call(getattr(meta, "title", ""))
-                    track_artist = safe_call(getattr(meta, "artist", ""))
-                    track_album = safe_call(getattr(meta, "album", ""))
-                    if track_title:
-                        state_updates["ZP_TRACK"] = track_title
-                    if track_artist:
-                        state_updates["ZP_ARTIST"] = track_artist
-                    if track_album:
-                        state_updates["ZP_ALBUM"] = track_album
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Failed to extract current_track_meta_data: {e}")
-
-            if current_uri and current_uri.startswith("x-sonosapi-radio:") and "enqueued_transport_uri_meta_data" in event_obj.variables:
-                self.logger.info(f"🧪 I am processing unique parameters for Pandora selected stream - Yes?")
+            # Pandora handling
+            if is_pandora and "enqueued_transport_uri_meta_data" in event_obj.variables:
                 meta = event_obj.variables["enqueued_transport_uri_meta_data"]
                 try:
                     station_title = safe_call(getattr(meta, "title", ""))
@@ -3036,50 +3090,66 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse enqueued_transport_uri_meta_data for Pandora: {e}")
 
-            if not is_siriusxm and not (current_uri and current_uri.startswith("x-sonosapi-radio:")) and meta:
-                self.logger.info(f"🧪 Processing non-XM, non-Pandora default streaming metadata")
-                self.logger.info(f"📦 Full raw meta object: {repr(meta)}")
-                self.logger.info(f"📦 Meta extra attributes: {getattr(meta, 'extra_attributes', {})}")
+            # Apple Music handling
+            if is_apple_music and "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
                 try:
                     track_title = safe_call(getattr(meta, "title", ""))
-                    track_artist = (
-                        safe_call(getattr(meta, "artist", "")) or
-                        safe_call(getattr(meta, "creator", "")) or
-                        safe_call(getattr(meta, "author", "")) or
-                        safe_call(getattr(meta, "performer", "")) or
-                        (meta.extra_attributes.get("upnp:artist", "") if hasattr(meta, "extra_attributes") else "")
-                    )
+                    track_creator = safe_call(getattr(meta, "creator", ""))
                     track_album = safe_call(getattr(meta, "album", ""))
-                    self.logger.info(f"🎵 Raw extracted values -> Title: '{track_title}', Artist: '{track_artist}', Album: '{track_album}'")
+
+                    if track_title:
+                        state_updates["ZP_TRACK"] = track_title
+                    if track_creator:
+                        state_updates["ZP_ARTIST"] = track_creator
+                    if track_album:
+                        state_updates["ZP_ALBUM"] = track_album
+
+                    self.safe_debug(f"🍎 Apple Music parsed: track={track_title}, artist={track_creator}, album={track_album}")
+
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to extract Apple Music metadata: {e}")
+
+            # Sonos fallback
+            if is_sonos and "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
+                try:
+                    track_title = safe_call(getattr(meta, "title", ""))
+                    track_artist = safe_call(getattr(meta, "artist", ""))
+                    track_album = safe_call(getattr(meta, "album", ""))
+                    track_creator = safe_call(getattr(meta, "creator", ""))
+
+                    if not track_artist and track_creator:
+                        track_artist = track_creator
+
+                    if not track_artist and " by " in track_title:
+                        parts = track_title.split(" by ", 1)
+                        track_title = parts[0].strip()
+                        track_artist = parts[1].strip()
+
                     if track_title:
                         state_updates["ZP_TRACK"] = track_title
                     if track_artist:
                         state_updates["ZP_ARTIST"] = track_artist
-                    else:
-                        fallback_artist = "[Unknown Artist]"
-                        self.logger.warning(f"⚠️ Artist metadata missing — using fallback: {fallback_artist}")
-                        state_updates["ZP_ARTIST"] = fallback_artist
+                    elif "ZP_ARTIST" not in state_updates:
+                        state_updates["ZP_ARTIST"] = ""
                     if track_album:
                         state_updates["ZP_ALBUM"] = track_album
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Failed to extract default streaming metadata: {e}")
 
+                    self.safe_debug(f"🎵 Sonos resolved track={track_title}, artist={track_artist}, album={track_album}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to extract Sonos current_track_meta_data: {e}")
+
+            # Handle album art (unchanged)
             coordinator = self.getCoordinatorDevice(indigo_device)
             is_master = (coordinator.address == indigo_device.address)
-
-
-
-
-
-            import shutil  # make sure this is at the top of your file
-
             album_art_uri = ""
+            artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
+            default_path = "/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork.jpg"
+            max_allowed_size = 600_000
+
             if is_master:
                 meta = event_obj.variables.get("current_track_meta_data", None)
-                artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
-                default_path = "/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork.jpg"
-                max_allowed_size = 600_000  # 600 KB
-
                 if meta:
                     album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
                     if album_art_uri.startswith("/"):
@@ -3091,117 +3161,57 @@ class SonosPlugin(object):
                             if response.status_code == 200:
                                 img_data = response.content
                                 if len(img_data) > max_allowed_size:
-                                    self.logger.warning(f"⚠️ Artwork too large in download ({len(img_data)} bytes) for {zone_ip}, replacing with default image.")
                                     if os.path.exists(artwork_path):
-                                        try:
-                                            os.remove(artwork_path)
-                                            self.logger.info(f"🗑️ Removed old oversized artwork file at {artwork_path}")
-                                        except Exception as cleanup_err:
-                                            self.logger.warning(f"⚠️ Failed to remove old oversized artwork: {cleanup_err}")
+                                        os.remove(artwork_path)
                                     if os.path.exists(default_path):
-                                        try:
-                                            shutil.copyfile(default_path, artwork_path)
-                                            self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                                        except Exception as copy_err:
-                                            self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                                    else:
-                                        self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                                        shutil.copyfile(default_path, artwork_path)
                                     album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                                 else:
                                     with open(artwork_path, "wb") as f:
                                         f.write(img_data)
-                                    actual_size = os.path.getsize(artwork_path)
-                                    if actual_size > max_allowed_size:
-                                        self.logger.warning(f"⚠️ Saved artwork file too large on disk ({actual_size} bytes) for {zone_ip}, replacing with default image.")
-                                        try:
-                                            os.remove(artwork_path)
-                                            self.logger.info(f"🗑️ Removed oversized saved artwork at {artwork_path}")
-                                        except Exception as cleanup_err:
-                                            self.logger.warning(f"⚠️ Failed to remove oversized artwork file: {cleanup_err}")
-                                        if os.path.exists(default_path):
-                                            try:
-                                                shutil.copyfile(default_path, artwork_path)
-                                                self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                                            except Exception as copy_err:
-                                                self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                                        else:
-                                            self.logger.warning(f"⚠️ Default image file not found at {default_path}")
-                                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                    else:
-                                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                        self.logger.info(f"🖼️ Updated album art URI for master {zone_ip} to: {album_art_uri}")
-                            else:
-                                self.logger.warning(f"⚠️ Failed to download album art. Status code: {response.status_code}")
-                                if os.path.exists(default_path):
-                                    try:
-                                        shutil.copyfile(default_path, artwork_path)
-                                        self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                                    except Exception as copy_err:
-                                        self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                                else:
-                                    self.logger.warning(f"⚠️ Default image file not found at {default_path}")
-                                album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                        except Exception as e:
-                            self.logger.warning(f"⚠️ Exception when downloading album art: {e}")
+                                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                        except Exception:
                             if os.path.exists(default_path):
-                                try:
-                                    shutil.copyfile(default_path, artwork_path)
-                                    self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                                except Exception as copy_err:
-                                    self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                            else:
-                                self.logger.warning(f"⚠️ Default image file not found at {default_path}")
-                            album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                    else:
-                        self.logger.warning(f"⚠️ Unexpected album_art_uri format: {album_art_uri}")
-                        if os.path.exists(default_path):
-                            try:
                                 shutil.copyfile(default_path, artwork_path)
-                                self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                            except Exception as copy_err:
-                                self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                        else:
-                            self.logger.warning(f"⚠️ Default image file not found at {default_path}")
-                        album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                            album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                 else:
-                    self.logger.warning(f"⚠️ No track metadata found for master {indigo_device.name}")
                     if os.path.exists(default_path):
-                        try:
-                            shutil.copyfile(default_path, artwork_path)
-                            self.logger.info(f"📋 Copied default image over to {artwork_path}")
-                        except Exception as copy_err:
-                            self.logger.warning(f"⚠️ Failed to copy default image to {artwork_path}: {copy_err}")
-                    else:
-                        self.logger.warning(f"⚠️ Default image file not found at {default_path}")
+                        shutil.copyfile(default_path, artwork_path)
                     album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
 
                 state_updates["ZP_ART"] = album_art_uri
             else:
                 master_zone_ip = coordinator.address
                 album_art_uri = f"http://localhost:8888/sonos_art_{master_zone_ip}.jpg"
-                self.logger.info(f"🖼️ Slave {indigo_device.name} using master artwork: {album_art_uri}")
                 state_updates["ZP_ART"] = album_art_uri
 
-    
-
-
-
-
-
+            # Apply updates
             if state_updates:
-                self.safe_debug(f"🧑‍💻 Updating {indigo_device.name} with state: {state_updates}")
                 for k, v in state_updates.items():
-                    self.logger.debug(f"🧑‍💻 Updating {indigo_device.name} state {k} with value {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
-
                 if is_master:
-                    self.logger.info(f"🧪 Replicating state updates to slave devices in the group for {indigo_device.name}")
                     self.updateStateOnSlaves(indigo_device)
-            else:
-                self.safe_debug(f"⚠️ No recognized state updates for {indigo_device.name}")
 
         except Exception as e:
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3533,7 +3543,6 @@ class SonosPlugin(object):
                         time.sleep(0.5)
                         self.logger.warning(f"⚠️ Exception during artwork download attempt {attempt}: {e}")
 
-
             if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
                 self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
                 master_artwork_file_path = DEFAULT_ARTWORK_PATH
@@ -3557,6 +3566,13 @@ class SonosPlugin(object):
 
                 for state in list(ZoneGroupStates):
                     value = dev.states.get(state, "")
+
+                    # Skip ZP_SOURCE overwrite if master holds fallback or empty value
+                    if state == "ZP_SOURCE":
+                        if value in ["Sonos", "Sonos - Fallback", "", None]:
+                            self.safe_debug(f"⚠️ Skipping ZP_SOURCE push to slave {indigo_slave_device.name} due to fallback value: {value}")
+                            continue
+
                     self.safe_debug(f"🧑‍💻 Updating slave {indigo_slave_device.name}, State: {state}, Value: {value}")
                     indigo_slave_device.updateStateOnServer(state, value)
 
@@ -3572,6 +3588,8 @@ class SonosPlugin(object):
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)
+
+
 
 
 

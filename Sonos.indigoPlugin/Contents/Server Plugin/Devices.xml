@@ -258,16 +258,25 @@
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
 			<State id="ZP_CurrentTrackURI">
-				<ValueType>String</ValueType>
-				<TriggerLabel>Current Track URI</TriggerLabel>
-				<ControlPageLabel>Current Track URI</ControlPageLabel>
-				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			    <ValueType>String</ValueType>
+			    <TriggerLabel>Current Track URI</TriggerLabel>
+			    <ControlPageLabel>Current Track URI</ControlPageLabel>
+			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
+
+			<State id="ZP_SOURCE">
+			    <ValueType>String</ValueType>
+			    <DefaultValue>Unknown</DefaultValue>
+			    <TriggerLabel>Source</TriggerLabel>
+			    <ControlPageLabel>Source</ControlPageLabel>
+			    <ControlPageLabelPrefix>Source is</ControlPageLabelPrefix>
+			</State>
+
 			<State id="ZoneGroupID">
-				<ValueType>String</ValueType>
-				<TriggerLabel>ZoneGroupID</TriggerLabel>
-				<ControlPageLabel>ZoneGroupID</ControlPageLabel>
-				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			    <ValueType>String</ValueType>
+			    <TriggerLabel>ZoneGroupID</TriggerLabel>
+			    <ControlPageLabel>ZoneGroupID</ControlPageLabel>
+			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
 			<State id="ZoneGroupName">
 				<ValueType>String</ValueType>
