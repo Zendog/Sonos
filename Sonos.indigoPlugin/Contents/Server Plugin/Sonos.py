@@ -2986,22 +2986,22 @@ class SonosPlugin(object):
                     self.safe_debug(f"✅ Detected Apple Music from legacy Sonos HTTP librarytrack")
                     break
 
-            # 🔴 INSERT APPLE MUSIC METADATA CHECK BEFORE DEFAULT FALLBACK
-            if not detected_source and "current_track_meta_data" in event_obj.variables:
-                meta = event_obj.variables["current_track_meta_data"]
-                try:
-                    if hasattr(meta, "to_dict"):
-                        meta_dict = meta.to_dict()
-                        resources = meta_dict.get("resources", [])
-                        if resources:
-                            resource = resources[0]
-                            uri = resource.get("uri", "")
-                            protocol = resource.get("protocol_info", "")
-                            if ".mp4" in uri and "audio/mp4" in protocol:
-                                detected_source = "Apple Music"
-                                self.safe_debug("✅ Detected Apple Music from resource URI and protocol_info")
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Failed during Apple Music metadata fallback detection: {e}")
+#            # 🔴 INSERT APPLE MUSIC METADATA CHECK BEFORE DEFAULT FALLBACK
+#            if not detected_source and "current_track_meta_data" in event_obj.variables:
+#                meta = event_obj.variables["current_track_meta_data"]
+#                try:
+#                    if hasattr(meta, "to_dict"):
+#                        meta_dict = meta.to_dict()
+#                        resources = meta_dict.get("resources", [])
+#                        if resources:
+#                            resource = resources[0]
+#                            uri = resource.get("uri", "")
+#                            protocol = resource.get("protocol_info", "")
+#                            if ".mp4" in uri and "audio/mp4" in protocol:
+#                                detected_source = "Apple Music"
+#                                self.safe_debug("✅ Detected Apple Music from resource URI and protocol_info")
+#                except Exception as e:
+#                    self.logger.warning(f"⚠️ Failed during Apple Music metadata fallback detection: {e}")
 
             # FINAL FALLBACK
             if not detected_source:
@@ -3076,6 +3076,11 @@ class SonosPlugin(object):
                     state_updates["ZP_TRACK"] = self.last_siriusxm_track_by_dev[dev_id]
                 if "ZP_ARTIST" not in state_updates and dev_id in self.last_siriusxm_artist_by_dev:
                     state_updates["ZP_ARTIST"] = self.last_siriusxm_artist_by_dev[dev_id]
+                ### Unconditional    
+                state_updates["ZP_STATION"] = self.last_siriusxm_track_by_dev[dev_id]
+
+
+
 
             # Pandora handling
             if is_pandora and "enqueued_transport_uri_meta_data" in event_obj.variables:
@@ -3085,30 +3090,51 @@ class SonosPlugin(object):
                     if station_title.endswith(" (My Station)"):
                         station_title = station_title.replace(" (My Station)", "").strip()
                     if station_title:
-                        state_updates["ZP_ARTIST"] = station_title
-                        self.safe_debug(f"📻 Extracted Pandora station name for artist: {station_title}")
+                        state_updates["ZP_STATION"] = station_title
+                        self.safe_debug(f"📻 Extracted Pandora station name: {station_title}")
+
+                    # Extract creator safely
+                    station_creator = safe_call(getattr(meta, "creator", ""))
+                    if station_creator:
+                        state_updates["ZP_CREATOR"] = station_creator
+                        # IMPORTANT: fallback to artist if ZP_ARTIST is not already set
+                        if "ZP_ARTIST" not in state_updates or not state_updates["ZP_ARTIST"]:
+                            state_updates["ZP_ARTIST"] = station_creator
+                        self.safe_debug(f"🎨 Extracted Pandora creator: {station_creator}")
+
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse enqueued_transport_uri_meta_data for Pandora: {e}")
 
-            # Apple Music handling
-            if is_apple_music and "current_track_meta_data" in event_obj.variables:
+            # General handling for current track metadata
+            if "current_track_meta_data" in event_obj.variables:
                 meta = event_obj.variables["current_track_meta_data"]
                 try:
-                    track_title = safe_call(getattr(meta, "title", ""))
-                    track_creator = safe_call(getattr(meta, "creator", ""))
-                    track_album = safe_call(getattr(meta, "album", ""))
+                    meta_dict = meta.to_dict()
+                    track_title = meta_dict.get("title", "")
+                    track_album = meta_dict.get("album", "")
+                    track_artist = meta_dict.get("artist", "")
+                    track_creator = meta_dict.get("creator", "")
 
                     if track_title:
                         state_updates["ZP_TRACK"] = track_title
-                    if track_creator:
-                        state_updates["ZP_ARTIST"] = track_creator
                     if track_album:
                         state_updates["ZP_ALBUM"] = track_album
 
-                    self.safe_debug(f"🍎 Apple Music parsed: track={track_title}, artist={track_creator}, album={track_album}")
+                    # Artist prioritization: use artist if present, otherwise fallback to creator
+                    if track_artist:
+                        state_updates["ZP_ARTIST"] = track_artist
+                    elif track_creator:
+                        state_updates["ZP_ARTIST"] = track_creator
+
+                    # Always store creator explicitly
+                    if track_creator:
+                        state_updates["ZP_CREATOR"] = track_creator
+
+                    self.safe_debug(f"🎵 General metadata parsed: title={track_title}, artist={track_artist}, creator={track_creator}, album={track_album}")
 
                 except Exception as e:
-                    self.logger.warning(f"⚠️ Failed to extract Apple Music metadata: {e}")
+                    self.logger.warning(f"⚠️ Failed to extract fields from current_track_meta_data: {e}")
+
 
             # Sonos fallback
             if is_sonos and "current_track_meta_data" in event_obj.variables:
@@ -3137,16 +3163,32 @@ class SonosPlugin(object):
                         state_updates["ZP_ALBUM"] = track_album
 
                     self.safe_debug(f"🎵 Sonos resolved track={track_title}, artist={track_artist}, album={track_album}")
+                    ### Unconditional    
+                    state_updates["ZP_STATION"] = "Local File"
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to extract Sonos current_track_meta_data: {e}")
 
-            # Handle album art (unchanged)
+            from PIL import Image
+            import io
+
+
+
+
+            try:
+                import PIL
+                pil_path = getattr(PIL, '__file__', 'unknown')
+                self.logger.info(f"✅ Pillow (PIL) module loaded from: {pil_path}")
+            except ImportError:
+                self.logger.error("❌ Pillow (PIL) module is NOT available in this environment.")
+
+
+
+            # Handle album art (with enforced resize + compression)
             coordinator = self.getCoordinatorDevice(indigo_device)
             is_master = (coordinator.address == indigo_device.address)
-            album_art_uri = ""
             artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
             default_path = "/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork.jpg"
-            max_allowed_size = 600_000
+            max_allowed_size = 800_000  # raw size check (optional, Pillow handles this better)
 
             if is_master:
                 meta = event_obj.variables.get("current_track_meta_data", None)
@@ -3155,31 +3197,52 @@ class SonosPlugin(object):
                     if album_art_uri.startswith("/"):
                         album_art_uri = f"http://{zone_ip}:1400{album_art_uri}"
 
-                    if album_art_uri.startswith("http://") or album_art_uri.startswith("https://"):
-                        try:
-                            response = requests.get(album_art_uri, timeout=5)
-                            if response.status_code == 200:
-                                img_data = response.content
-                                if len(img_data) > max_allowed_size:
-                                    if os.path.exists(artwork_path):
-                                        os.remove(artwork_path)
+                    if album_art_uri:
+                        self.logger.debug(f"🎨 Attempting to fetch album art: {album_art_uri}")
+                        if album_art_uri.startswith("http://") or album_art_uri.startswith("https://"):
+                            try:
+                                response = requests.get(album_art_uri, timeout=5)
+                                if response.status_code == 200:
+                                    img_data = response.content
+                                    img_size = len(img_data)
+                                    self.logger.debug(f"✅ Album art fetched ({img_size} bytes)")
+
+                                    try:
+                                        image = Image.open(io.BytesIO(img_data))
+                                        image.thumbnail((500, 500))  # resize to max 500x500
+                                        image = image.convert("RGB")  # ensure JPEG-compatible
+                                        image.save(artwork_path, format="JPEG", quality=75)
+                                        self.logger.debug(f"🎨 Resized and saved album art at {artwork_path}")
+                                    except Exception as img_err:
+                                        self.logger.error(f"❌ Failed processing image: {img_err}; using default")
+                                        if os.path.exists(default_path):
+                                            shutil.copyfile(default_path, artwork_path)
+
+                                else:
+                                    self.logger.warning(f"⚠️ Album art fetch HTTP {response.status_code}; using default")
                                     if os.path.exists(default_path):
                                         shutil.copyfile(default_path, artwork_path)
-                                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                                else:
-                                    with open(artwork_path, "wb") as f:
-                                        f.write(img_data)
-                                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-                        except Exception:
+
+                            except Exception as e:
+                                self.logger.error(f"❌ Exception fetching album art: {e}; using default")
+                                if os.path.exists(default_path):
+                                    shutil.copyfile(default_path, artwork_path)
+                        else:
+                            self.logger.warning(f"⚠️ Non-HTTP album art URI: {album_art_uri}; using default")
                             if os.path.exists(default_path):
                                 shutil.copyfile(default_path, artwork_path)
-                            album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
+                    else:
+                        self.logger.warning("⚠️ No album_art_uri provided; using default")
+                        if os.path.exists(default_path):
+                            shutil.copyfile(default_path, artwork_path)
                 else:
+                    self.logger.warning("⚠️ No current_track_meta_data available; using default art")
                     if os.path.exists(default_path):
                         shutil.copyfile(default_path, artwork_path)
-                    album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
 
+                album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
                 state_updates["ZP_ART"] = album_art_uri
+
             else:
                 master_zone_ip = coordinator.address
                 album_art_uri = f"http://localhost:8888/sonos_art_{master_zone_ip}.jpg"
@@ -3191,6 +3254,10 @@ class SonosPlugin(object):
                     indigo_device.updateStateOnServer(key=k, value=v)
                 if is_master:
                     self.updateStateOnSlaves(indigo_device)
+
+
+
+
 
         except Exception as e:
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
@@ -3265,6 +3332,66 @@ class SonosPlugin(object):
         except Exception as e:
             self.logger.error(f"❌ Error in getCoordinatorDevice: {e}")
             return device  # fallback: treat self as coordinator
+
+    def clear_device_states(self, indigo_device):
+        try:
+            state_defaults = {
+                "ModelName": "",
+                "SerialNumber": "",
+                "ZP_INFO": "",
+                "ZP_STATION": "",
+                "ZP_VOLUME": "",
+                "ZP_VOLUME_MASTER": 0,
+                "ZP_VOLUME_LF": 0,
+                "ZP_VOLUME_RF": 0,
+                "ZP_MUTE": "false",
+                "ZP_BASS": "0",
+                "ZP_TREBLE": "0",
+                "ZP_STATE": "",
+                "ZP_ART": "",
+                "ZP_TRACK": "",
+                "ZP_DURATION": "",
+                "ZP_RELATIVE": "",
+                "ZP_ALBUM": "",
+                "ZP_ARTIST": "",
+                "ZP_CREATOR": "",
+                "ZP_AIName": "",
+                "ZP_AIPath": "",
+                "ZP_CurrentURI": "",
+                "ZP_ZoneName": "",
+                "ZP_LocalUID": "",
+                "ZP_NALBUM": "",
+                "ZP_NARTIST": "",
+                "ZP_NCREATOR": "",
+                "ZP_NART": "",
+                "ZP_NTRACK": "",
+                "Q_Crossfade": False,
+                "Q_Repeat": False,
+                "Q_RepeatOne": False,
+                "Q_Shuffle": False,
+                "Q_Number": "",
+                "Q_ObjectID": "",
+                "GROUP_Coordinator": False,
+                "GROUP_Name": "",
+                "ZP_CurrentTrack": "",
+                "ZP_CurrentTrackURI": "",
+                "ZP_SOURCE": "Unknown",
+                "ZoneGroupID": "",
+                "ZoneGroupName": "",
+                "ZonePlayerUUIDsInGroup": "",
+                "bootseq": 0,
+                "alive": "",
+            }
+
+            for state_id, default_value in state_defaults.items():
+                indigo_device.updateStateOnServer(state_id, default_value)
+
+            self.logger.info(f"✅ Cleared all states for device '{indigo_device.name}'")
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to clear states for device '{indigo_device.name}': {e}")
+
+
 
 
 
