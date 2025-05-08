@@ -40,7 +40,18 @@
 				<TriggerLabel>SerialNumber</TriggerLabel>
 				<ControlPageLabel>SerialNumber</ControlPageLabel>
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
-			</State>			
+			</State>
+
+
+			<State id="State">
+			    <ValueType>String</ValueType>
+			    <TriggerLabel>Playback State</TriggerLabel>
+			    <ControlPageLabel>Playback State</ControlPageLabel>
+			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+
+
+						
 			<State id="ZP_INFO">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Info</TriggerLabel>
@@ -263,6 +274,27 @@
 			    <ControlPageLabel>Current Track URI</ControlPageLabel>
 			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
+
+
+			<State id="ZP_AVTransportURI">
+			    <ValueType>String</ValueType>
+			    <TriggerLabel>AVTransport URI</TriggerLabel>
+			    <ControlPageLabel>AVTransport URI</ControlPageLabel>
+			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+
+			<State id="ZP_EnqueuedURI">
+			    <ValueType>String</ValueType>
+			    <TriggerLabel>Enqueued URI</TriggerLabel>
+			    <ControlPageLabel>Enqueued URI</ControlPageLabel>
+			    <ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+
+
+
+
+
+
 
 			<State id="ZP_SOURCE">
 			    <ValueType>String</ValueType>
