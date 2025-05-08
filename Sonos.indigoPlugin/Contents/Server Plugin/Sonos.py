@@ -423,15 +423,17 @@ class SonosPlugin(object):
                 dispatch_table[action_id](pluginAction, dev, zoneIP)
                 return
 
+
+
+
             # Inline action handlers follow...
-            # ... (Omitted for brevity)
-            # Inline handlers
             if action_id == "actionBassUp":
                 current = int(dev.states.get("ZP_BASS", 0))
                 newVal = max(min(current + 1, 10), -10)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass",
                               f"<DesiredBass>{newVal}</DesiredBass>")
                 self.logger.info(f"🔊 Bass increased on {dev.name}: {current} → {newVal}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionBassDown":
@@ -440,6 +442,7 @@ class SonosPlugin(object):
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass",
                               f"<DesiredBass>{newVal}</DesiredBass>")
                 self.logger.info(f"🔉 Bass decreased on {dev.name}: {current} → {newVal}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionTrebleUp":
@@ -448,6 +451,7 @@ class SonosPlugin(object):
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble",
                               f"<DesiredTreble>{newVal}</DesiredTreble>")
                 self.logger.info(f"🎶 Treble increased on {dev.name}: {current} → {newVal}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionTrebleDown":
@@ -456,15 +460,17 @@ class SonosPlugin(object):
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetTreble",
                               f"<DesiredTreble>{newVal}</DesiredTreble>")
                 self.logger.info(f"🎵 Treble decreased on {dev.name}: {current} → {newVal}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionVolumeUp":
-                self.safe_debug("🧪 Matched action_id == actionVolumeUp")  # <- ADD THIS
+                self.safe_debug("🧪 Matched action_id == actionVolumeUp")
                 current = int(dev.states.get("ZP_VOLUME_MASTER", 0))
                 new_volume = min(100, current + 5)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume",
                               f"<Channel>Master</Channel><DesiredVolume>{new_volume}</DesiredVolume>")
                 self.logger.info(f"🔊 Volume UP for {dev.name}: {current} → {new_volume}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionVolumeDown":
@@ -473,6 +479,7 @@ class SonosPlugin(object):
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume",
                               f"<Channel>Master</Channel><DesiredVolume>{new_volume}</DesiredVolume>")
                 self.logger.info(f"🔉 Volume DOWN for {dev.name}: {current} → {new_volume}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionMuteToggle":
@@ -482,18 +489,21 @@ class SonosPlugin(object):
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute",
                               f"<Channel>Master</Channel><DesiredMute>{mute_val}</DesiredMute>")
                 self.logger.info(f"🎚 Mute TOGGLE for {dev.name}: {'Off' if mute_state else 'On'}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionMuteOn":
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute",
                               "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
                 self.logger.info(f"🔇 Mute ON for {dev.name}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionMuteOff":
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute",
                               "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
                 self.logger.info(f"🔊 Mute OFF for {dev.name}")
+                self.refresh_transport_state(zoneIP)
                 return
 
             elif action_id == "actionStop":
@@ -501,15 +511,13 @@ class SonosPlugin(object):
                 self.logger.info(f"⏹️ Stop triggered for {dev.name}")
                 return
 
-
             elif action_id == "actionNext":
                 uri = dev.states.get("ZP_CurrentTrackURI", "") or dev.states.get("ZP_AVTransportURI", "")
                 self.safe_debug(f"🧪 Checking for SiriusXM stream in URI: {uri}")
-                self.safe_debug(f"🧪 Current track URI for Next: {uri}")
                 if "sirius" in uri.lower() or "x-sonosapi-" in uri.lower():
                     self.logger.info(f"📻 Detected SiriusXM stream — calling channelUpOrDown(up) for {dev.name}")
                     self.channelUpOrDown(dev, direction="up")
-                    return  # ✅ ensure no fallthrough
+                    return
                 else:
                     self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Next", "<InstanceID>0</InstanceID>")
                     self.logger.info(f"⏭️ Next track for {dev.name}")
@@ -518,16 +526,14 @@ class SonosPlugin(object):
             elif action_id == "actionPrevious":
                 uri = dev.states.get("ZP_CurrentTrackURI", "") or dev.states.get("ZP_AVTransportURI", "")
                 self.safe_debug(f"🧪 Checking for SiriusXM stream in URI: {uri}")
-                self.safe_debug(f"🧪 Current track URI for Previous: {uri}")
                 if "sirius" in uri.lower() or "x-sonosapi-" in uri.lower():
                     self.logger.info(f"📻 Detected SiriusXM stream — calling channelUpOrDown(down) for {dev.name}")
                     self.channelUpOrDown(dev, direction="down")
-                    return  # ✅ ensure no fallthrough
+                    return
                 else:
                     self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Previous", "<InstanceID>0</InstanceID>")
                     self.logger.info(f"⏮️ Previous track for {dev.name}")
                 return
-
 
             elif action_id == "actionTogglePlay":
                 state = dev.states.get("ZP_STATE", "STOPPED").upper()
@@ -539,11 +545,9 @@ class SonosPlugin(object):
                     self.logger.info(f"⏸ Pause for {dev.name}")
                 return
 
-
             elif action_id == "ZP_LIST":
                 self.actionZP_LIST(pluginAction, dev)
                 return
-
 
 
             # If it gets this far, action was not handled
@@ -587,6 +591,32 @@ class SonosPlugin(object):
         except Exception:
             pass  # Absolute last resort: don't let even logging crash
 
+
+
+    def refresh_transport_state(self, zone_ip):
+        """
+        Refresh the transport state for a given zone IP by querying the current state
+        and updating relevant Indigo device states (ZP_STATE, etc.).
+        This helps reestablish correct state after volume or mute changes that cause Sonos to misreport sources.
+        """
+        try:
+            speaker = self.getSoCoDeviceByIP(zone_ip)
+            if not speaker:
+                self.logger.warning(f"⚠️ Cannot refresh transport state — no SoCo device found for {zone_ip}")
+                return
+
+            state = speaker.get_current_transport_info().get("current_transport_state", "").upper()
+            dev = next((d for d in indigo.devices.iter("self") if d.address == zone_ip), None)
+
+            if dev:
+                dev.updateStateOnServer("ZP_STATE", state)
+                dev.updateStateOnServer("State", state)
+                self.logger.debug(f"🔄 Refreshed transport state for {dev.name}: {state}")
+            else:
+                self.logger.warning(f"⚠️ No Indigo device matched to IP {zone_ip} during refresh")
+
+        except Exception as e:
+            self.logger.error(f"❌ refresh_transport_state failed for {zone_ip}: {e}")
 
 
 
@@ -2891,9 +2921,9 @@ class SonosPlugin(object):
 
 
 
-    #################################################################################################
-    ### Event Handler to process soco state changes and retreive current dynamic state updates
-    #################################################################################################
+    #######################################################################################################################################
+    ### Event Handler to process lightweight soco state changes (sound related kiond of things) and retreive current dynamic state updates
+    #######################################################################################################################################
 
     def soco_event_handler(self, event_obj):
         try:
@@ -2962,41 +2992,7 @@ class SonosPlugin(object):
                 ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
             ]
 
-            # Initialize helpers and flags early
-            is_siriusxm = False
-            is_pandora = False
-            is_apple_music = False
-            is_sonos_radio = False
-            is_sonos = False
-            detected_source = "Sonos"  # default fallback
 
-            for name, uri in uri_priority:
-                if "x-sonosapi-hls:channel-linear" in uri:
-                    detected_source = "SiriusXM"
-                    is_siriusxm = True
-                    break
-                elif "x-sonosapi-radio" in uri or "VC1%3a%3aST%3a%3aST%3a" in uri:
-                    detected_source = "Pandora"
-                    is_pandora = True
-                    break
-                elif "x-apple-music" in uri:
-                    detected_source = "Apple Music"
-                    is_apple_music = True
-                    break
-                elif "x-sonosapi-stream" in uri:
-                    detected_source = "Sonos Radio"
-                    is_sonos_radio = True
-                    break
-                elif "x-sonos-http:librarytrack" in uri:
-                    detected_source = "Sonos"
-                    is_apple_music = True
-                    break
-
-            if detected_source == "Sonos":
-                is_sonos = True
-
-            self.safe_debug(f"✅ Detected source: {detected_source}")
-            state_updates["ZP_SOURCE"] = detected_source
 
             if "volume" in event_obj.variables:
                 vol = event_obj.variables["volume"]
@@ -3027,11 +3023,12 @@ class SonosPlugin(object):
                     self.safe_debug(f"🔄 Lightweight update → {k}: {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
-            self.handle_heavyweight_updates(
-                event_obj, indigo_device, dev_id, zone_ip,
-                is_siriusxm, is_pandora, is_apple_music, is_sonos,
-                state_updates
-            )
+
+
+            self.handle_heavyweight_updates(event_obj, indigo_device, dev_id, zone_ip, state_updates)
+
+
+
 
         except Exception as e:
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
@@ -3045,13 +3042,11 @@ class SonosPlugin(object):
 
 
 
-    #################################################################################################
-    ### New - Heavyweight
-    #################################################################################################
+    ############################################################################################################
+    ### New - Heavyweight for transport related kind of events (channel changes, source change, album art, etc.)
+    ############################################################################################################
 
-
-    def handle_heavyweight_updates(self, event_obj, indigo_device, dev_id, zone_ip,
-                                   is_siriusxm, is_pandora, is_apple_music, is_sonos, state_updates):
+    def handle_heavyweight_updates(self, event_obj, indigo_device, dev_id, zone_ip, state_updates):
 
         state_updates = {}
 
@@ -3071,6 +3066,49 @@ class SonosPlugin(object):
         if not has_metadata_update:
             self.safe_debug("⚡ Skipping heavyweight updates: no metadata present in this event")
             return  # Exit early if no media/metadata updates
+
+
+        uri_priority = [
+            ("enqueued_transport_uri", event_obj.variables.get("enqueued_transport_uri", "")),
+            ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
+            ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
+        ]
+
+        # Initialize helpers and flags early
+        is_siriusxm = False
+        is_pandora = False
+        is_apple_music = False
+        is_sonos_radio = False
+        is_sonos = False
+        detected_source = "Sonos"  # default fallback
+
+        for name, uri in uri_priority:
+            if "x-sonosapi-hls:channel-linear" in uri:
+                detected_source = "SiriusXM"
+                is_siriusxm = True
+                break
+            elif "x-sonosapi-radio" in uri or "VC1%3a%3aST%3a%3aST%3a" in uri:
+                detected_source = "Pandora"
+                is_pandora = True
+                break
+            elif "x-apple-music" in uri:
+                detected_source = "Apple Music"
+                is_apple_music = True
+                break
+            elif "x-sonosapi-stream" in uri:
+                detected_source = "Sonos Radio"
+                is_sonos_radio = True
+                break
+            elif "x-sonos-http:librarytrack" in uri:
+                detected_source = "Sonos"
+                is_apple_music = True
+                break
+
+        if detected_source == "Sonos":
+            is_sonos = True
+
+        self.safe_debug(f"✅ Detected source: {detected_source}")
+        state_updates["ZP_SOURCE"] = detected_source
 
         # === SiriusXM handling ===
         if is_siriusxm:
@@ -3196,7 +3234,7 @@ class SonosPlugin(object):
                             else:
                                 raise Exception(f"HTTP {response.status_code}")
                         except Exception as e:
-                            self.logger.warning(f"⚠️ No album art initially identified - lets try again: {e}; - using default")
+                            self.logger.debug(f"⚠️ No album art initially identified - lets try again: {e}; - using default")
                             if os.path.exists(default_path):
                                 shutil.copyfile(default_path, artwork_path)
                     else:
@@ -3204,7 +3242,7 @@ class SonosPlugin(object):
                         if os.path.exists(default_path):
                             shutil.copyfile(default_path, artwork_path)
                 else:
-                    self.logger.warning("⚠️ No current_track_meta_data; using default art")
+                    #self.logger.warning("⚠️ No current_track_meta_data; using default art")
                     if os.path.exists(default_path):
                         shutil.copyfile(default_path, artwork_path)
 
@@ -3224,9 +3262,8 @@ class SonosPlugin(object):
                 self.safe_debug(f"🔄 Heavyweight update → {k}: {v}")
                 indigo_device.updateStateOnServer(key=k, value=v)
 
-
-
-
+            if is_master:
+                self.updateStateOnSlaves(indigo_device)
 
 
     #################################################################################################
@@ -3667,7 +3704,7 @@ class SonosPlugin(object):
                 self.logger.warning(f"⚠️ Coordinator Indigo device not found for IP {coordinator_ip}; skipping slave updates")
                 return
 
-            self.logger.info(f"🧪 Coordinator resolved: {coordinator_dev.name} at IP {coordinator_ip}")
+            #self.logger.info(f"🧪 Coordinator resolved: {coordinator_dev.name} at IP {coordinator_ip}")
 
             # Fetch coordinator group name
             master_group_name = coordinator.player_name or "Unknown Group"
@@ -3687,13 +3724,13 @@ class SonosPlugin(object):
 
             master_artwork_file_path = None
             artwork_url = coordinator_dev.states.get('ZP_ART', None)
-            self.logger.info(f"🧪 Coordinator ZP_ART value: {artwork_url}")
+            #self.logger.info(f"🧪 Coordinator ZP_ART value: {artwork_url}")
 
             if artwork_url and not artwork_url.endswith("default.jpg"):
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
                     try:
                         response = requests.get(artwork_url, stream=True, timeout=10)
-                        self.logger.warning(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
+                        self.logger.debug(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
                         time.sleep(1.5)
 
                         if response.status_code == 200:
@@ -3715,7 +3752,7 @@ class SonosPlugin(object):
                         self.logger.warning(f"⚠️ Exception during artwork download attempt {attempt}: {e}")
 
             if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
-                self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
+                #self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
                 master_artwork_file_path = DEFAULT_ARTWORK_PATH
 
             # Push master states to slaves
@@ -3756,7 +3793,7 @@ class SonosPlugin(object):
                     self.logger.error(f"❌ Error copying artwork to slave {indigo_slave_device.name}: {e}")
 
                 indigo_slave_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_slave_device.address}.jpg")
-                self.logger.info(f"🧑‍💻 Successfully updated slave: {indigo_slave_device.name} with IP: {indigo_slave_device.address}")
+                self.logger.debug(f"🧑‍💻 Successfully updated slave: {indigo_slave_device.name} with IP: {indigo_slave_device.address}")
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)
