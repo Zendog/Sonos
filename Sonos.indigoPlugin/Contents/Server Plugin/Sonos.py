@@ -1,3 +1,6 @@
+import urllib.parse
+import datetime  # ✅ Needed for fallback print timestamp
+import io
 import sys
 import os
 import json
@@ -3023,8 +3026,27 @@ class SonosPlugin(object):
                     self.safe_debug(f"🔄 Lightweight update → {k}: {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
+            # After handling AVTransport, RenderingControl events
+            soco_device = self.getSoCoDeviceByIP(indigo_device.address)
+            if soco_device:
+                self.refresh_group_membership(indigo_device, soco_device)
+
+                # ✅ Unconditionally refresh master & propagate to slaves
+                self.logger.debug(f"🔁 Forcing master state save and slave updates for {indigo_device.name}")
+
+                # Save current master device states explicitly (this can be no-op if up-to-date)
+                # You might not need extra code if refresh_group_membership already did this.
+
+                # Update all slave devices from master state
+                self.updateStateOnSlaves(indigo_device)
+            else:
+                self.logger.warning(f"⚠️ Could not refresh group membership: No SoCo device for {indigo_device.name}")
+
+                
 
 
+
+             # After lightweight handling invoke heavyweight to check for events           
             self.handle_heavyweight_updates(event_obj, indigo_device, dev_id, zone_ip, state_updates)
 
 
@@ -3660,6 +3682,102 @@ class SonosPlugin(object):
                     self.logger.info(row)
 
 
+    def refresh_group_membership(self, indigo_device, soco_device):
+        try:
+            group = soco_device.group
+            coordinator = group.coordinator
+            devices_in_group = group.members
+
+            coordinator_ip = coordinator.ip_address.strip()
+            is_coordinator = (coordinator_ip == indigo_device.address.strip())
+            current_group_name = coordinator.player_name or ""
+
+            # Update coordinator and group name state
+            indigo_device.updateStateOnServer("GROUP_Coordinator", str(is_coordinator).lower())
+            indigo_device.updateStateOnServer("GROUP_Name", current_group_name)
+            self.safe_debug(f"🔄 Updated {indigo_device.name} → GROUP_Coordinator: {is_coordinator}, GROUP_Name: {current_group_name}")
+
+            # Handle Artwork
+            ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
+            DEFAULT_ARTWORK_PATH = ARTWORK_FOLDER + "default_artwork.jpg"
+            artwork_path = f"{ARTWORK_FOLDER}sonos_art_{indigo_device.address}.jpg"
+
+            if is_coordinator:
+                # Standalone or master — fetch own artwork or fallback
+                meta = soco_device.get_current_track_info()
+                album_art_uri = meta.get('album_art', '')
+                if album_art_uri and album_art_uri.startswith('/'):
+                    album_art_uri = f"http://{coordinator_ip}:1400{album_art_uri}"
+
+                if album_art_uri.startswith("http"):
+                    try:
+                        response = requests.get(album_art_uri, timeout=5)
+                        if response.status_code == 200:
+                            img_data = response.content
+                            image = Image.open(io.BytesIO(img_data))
+                            image.thumbnail((500, 500))
+                            image = image.convert("RGB")
+                            image.save(artwork_path, format="JPEG", quality=75)
+                            self.safe_debug(f"🖼️ Updated artwork for {indigo_device.name} from {album_art_uri}")
+                        else:
+                            raise Exception(f"HTTP {response.status_code}")
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Failed to fetch artwork for {indigo_device.name}: {e}")
+                        if os.path.exists(DEFAULT_ARTWORK_PATH):
+                            shutil.copyfile(DEFAULT_ARTWORK_PATH, artwork_path)
+                else:
+                    self.safe_debug(f"⚠️ No valid album_art_uri for {indigo_device.name}, using default")
+                    if os.path.exists(DEFAULT_ARTWORK_PATH):
+                        shutil.copyfile(DEFAULT_ARTWORK_PATH, artwork_path)
+
+                indigo_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_device.address}.jpg")
+            else:
+                # Slave — point to master's artwork
+                master_art_path = f"http://localhost:8888/sonos_art_{coordinator_ip}.jpg"
+                indigo_device.updateStateOnServer("ZP_ART", master_art_path)
+                self.safe_debug(f"🖼️ Slave {indigo_device.name} linked to master artwork: {master_art_path}")
+
+            # Force refresh of key player states
+            if is_coordinator:
+                current_track_info = soco_device.get_current_track_info()
+                transport_info = soco_device.get_current_transport_info()
+
+                zp_state = transport_info.get('current_transport_state', 'STOPPED').upper()
+                current_track_uri = current_track_info.get('uri', '')
+                current_title = current_track_info.get('title', '')
+                current_artist = current_track_info.get('artist', '')
+
+                indigo_device.updateStateOnServer("ZP_STATE", zp_state)
+                indigo_device.updateStateOnServer("ZP_TRACK", current_title or "")
+                indigo_device.updateStateOnServer("ZP_ARTIST", current_artist or "")
+                indigo_device.updateStateOnServer("ZP_CurrentTrackURI", current_track_uri or "")
+
+                self.safe_debug(f"🔄 Refreshed standalone states for {indigo_device.name} → State: {zp_state}, Track: {current_title}, Artist: {current_artist}")
+            else:
+                # Sync slave states from coordinator device
+                master_dev = None
+                for dev in indigo.devices:
+                    if dev.address.strip() == coordinator_ip:
+                        master_dev = dev
+                        break
+
+                if master_dev:
+                    for state_key in ["ZP_STATE", "ZP_TRACK", "ZP_ARTIST", "ZP_CurrentTrackURI", "ZP_ART"]:
+                        master_value = master_dev.states.get(state_key, "")
+                        indigo_device.updateStateOnServer(state_key, master_value)
+                        self.safe_debug(f"🔄 Synced slave {indigo_device.name} {state_key} → {master_value}")
+                else:
+                    self.logger.warning(f"⚠️ Could not find master device {coordinator_ip} to sync states for slave {indigo_device.name}")
+
+        except Exception as e:
+            self.logger.error(f"❌ Exception in refresh_group_membership for {indigo_device.name}: {e}")
+
+
+
+
+
+
+
 
     def updateStateOnSlaves(self, dev):
         try:
@@ -3672,7 +3790,6 @@ class SonosPlugin(object):
 
             os.makedirs(ARTWORK_FOLDER, exist_ok=True)
 
-            # Ensure default artwork exists
             if not os.path.exists(DEFAULT_ARTWORK_PATH):
                 try:
                     shutil.copy(DEFAULT_ARTWORK_SOURCE, DEFAULT_ARTWORK_PATH)
@@ -3704,27 +3821,37 @@ class SonosPlugin(object):
                 self.logger.warning(f"⚠️ Coordinator Indigo device not found for IP {coordinator_ip}; skipping slave updates")
                 return
 
-            #self.logger.info(f"🧪 Coordinator resolved: {coordinator_dev.name} at IP {coordinator_ip}")
-
-            # Fetch coordinator group name
             master_group_name = coordinator.player_name or "Unknown Group"
 
-            # Prepare list of Indigo slave devices
+            # Identify Indigo devices for all group slaves
             slave_devices = []
-            for member in devices_in_group:
-                if member.ip_address.strip() != coordinator_ip:
-                    for indigo_device in indigo.devices:
-                        if indigo_device.address.strip() == member.ip_address.strip():
-                            slave_devices.append(indigo_device)
+            group_member_ips = {member.ip_address.strip() for member in devices_in_group}
 
-            # Pre-clear states on all known slaves
+            for indigo_device in indigo.devices:
+                if indigo_device.address.strip() != coordinator_ip and indigo_device.address.strip() in group_member_ips:
+                    slave_devices.append(indigo_device)
+
+            # Update slaves in the group
             for slave_dev in slave_devices:
-                slave_dev.updateStateOnServer(key="GROUP_Coordinator", value="false")
-                slave_dev.updateStateOnServer(key="GROUP_Name", value=master_group_name)
+                slave_dev.updateStateOnServer("GROUP_Coordinator", "false")
+                slave_dev.updateStateOnServer("GROUP_Name", master_group_name)
 
+            # Cleanup: Update devices NOT in this group (or now standalone)
+            for indigo_device in indigo.devices:
+                device_ip_clean = indigo_device.address.strip()
+                if device_ip_clean not in group_member_ips and device_ip_clean != coordinator_ip:
+                    # Determine if device is its own coordinator (standalone)
+                    soco_dev = self.soco_by_ip.get(device_ip_clean)
+                    if not soco_dev:
+                        continue
+                    if soco_dev.group.coordinator.ip_address.strip() == device_ip_clean:
+                        indigo_device.updateStateOnServer("GROUP_Coordinator", "true")
+                        indigo_device.updateStateOnServer("GROUP_Name", soco_dev.player_name)
+                        self.safe_debug(f"🔄 Updated standalone device {indigo_device.name} → Coordinator: true, Group Name: {soco_dev.player_name}")
+
+            # Artwork sync for slaves
             master_artwork_file_path = None
             artwork_url = coordinator_dev.states.get('ZP_ART', None)
-            #self.logger.info(f"🧪 Coordinator ZP_ART value: {artwork_url}")
 
             if artwork_url and not artwork_url.endswith("default.jpg"):
                 for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
@@ -3741,7 +3868,7 @@ class SonosPlugin(object):
 
                             if os.path.exists(master_artwork_file_path):
                                 artwork_size = os.path.getsize(master_artwork_file_path)
-                                self.safe_debug(f"🖼️ Artwork saved on attempt {attempt} for master {coordinator_dev.name} at {master_artwork_file_path}, Size: {artwork_size} bytes")
+                                self.safe_debug(f"🖼️ Artwork saved for master {coordinator_dev.name} ({artwork_size} bytes)")
                                 break
                             else:
                                 self.logger.warning(f"⚠️ Artwork file not saved properly on attempt {attempt}")
@@ -3752,16 +3879,12 @@ class SonosPlugin(object):
                         self.logger.warning(f"⚠️ Exception during artwork download attempt {attempt}: {e}")
 
             if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
-                #self.logger.warning(f"⚠️ Master artwork unavailable; using default artwork.")
                 master_artwork_file_path = DEFAULT_ARTWORK_PATH
 
-            # Push master states to slaves
+            # Push master states to group slaves (as before)
             for rdev in devices_in_group:
                 if rdev == coordinator:
-                    self.safe_debug(f"🧑‍💻 Skipping coordinator: {rdev.player_name} (IP: {rdev.ip_address})")
                     continue
-
-                self.safe_debug(f"🧑‍💻 Processing slave: {rdev.player_name} (IP: {rdev.ip_address})")
 
                 indigo_slave_device = None
                 for indigo_device in indigo.devices:
@@ -3770,43 +3893,41 @@ class SonosPlugin(object):
                         break
 
                 if not indigo_slave_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for slave {rdev.player_name} with IP {rdev.ip_address}, skipping.")
+                    self.logger.warning(f"⚠️ No Indigo device found for slave {rdev.player_name} ({rdev.ip_address}), skipping.")
                     continue
 
                 for state in list(ZoneGroupStates):
                     value = dev.states.get(state, "")
 
-                    # Skip ZP_SOURCE overwrite if master holds fallback or empty value
-                    if state == "ZP_SOURCE":
-                        if value in ["Sonos", "Sonos - Fallback", "", None]:
-                            self.safe_debug(f"⚠️ Skipping ZP_SOURCE push to slave {indigo_slave_device.name} due to fallback value: {value}")
-                            continue
+                    if state == "ZP_SOURCE" and value in ["Sonos", "Sonos - Fallback", "", None]:
+                        continue
 
-                    self.safe_debug(f"🧑‍💻 Updating slave {indigo_slave_device.name}, State: {state}, Value: {value}")
                     indigo_slave_device.updateStateOnServer(state, value)
+
+                # Ensure group name is correct even after all updates
+                indigo_slave_device.updateStateOnServer("GROUP_Name", master_group_name)
 
                 try:
                     slave_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{indigo_slave_device.address}.jpg"
                     shutil.copy(master_artwork_file_path, slave_artwork_file_path)
-                    self.safe_debug(f"🖼️ Copied master artwork to slave {indigo_slave_device.name} at {slave_artwork_file_path}")
+                    self.safe_debug(f"🖼️ Copied artwork to slave {indigo_slave_device.name}")
                 except Exception as e:
-                    self.logger.error(f"❌ Error copying artwork to slave {indigo_slave_device.name}: {e}")
+                    self.logger.error(f"❌ Failed copying artwork to slave {indigo_slave_device.name}: {e}")
 
                 indigo_slave_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_slave_device.address}.jpg")
-                self.logger.debug(f"🧑‍💻 Successfully updated slave: {indigo_slave_device.name} with IP: {indigo_slave_device.address}")
+                self.logger.debug(f"🧑‍💻 Slave {indigo_slave_device.name} state sync complete")
 
-        except Exception as exception_error:
-            self.exception_handler(exception_error, True)
-
-
+        except Exception as e:
+            self.exception_handler(e, True)
 
 
 
 
 
-    import os
-    import shutil
-    import requests
+
+
+
+
 
 
     def copyStateFromMaster(self, dev):
@@ -4478,23 +4599,26 @@ class SonosPlugin(object):
 ## SiriusXM Class wraps the SXM.PY app into a standalone class that will be used for login / session management / metadata capture for use within the indigo plugin   ##
 ########################################################################################################################################################################
 
+
 class SiriusXM:
     USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/604.5.6 (KHTML, like Gecko) Version/11.0.3 Safari/604.5.6'
     REST_FORMAT = 'https://player.siriusxm.com/rest/v2/experience/modules/{}'
     LIVE_PRIMARY_HLS = 'https://siriusxm-priprodlive.akamaized.net'
 
-    def __init__(self, username, password):
+    def __init__(self, username, password, logger=None):
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': self.USER_AGENT})
         self.username = username
         self.password = password
         self.playlists = {}
         self.channels = None
-        #self.pluginPrefs = pluginPrefs
+        self.logger = logger  # ✅ Indigo logger passed in
 
-    @staticmethod
-    def log(x):
-        print('{} <SiriusXM>: {}'.format(datetime.datetime.now().strftime('%d.%b %Y %H:%M:%S'), x))
+    def log(self, message):
+        if self.logger:
+            self.logger.warning(f"<SiriusXM>: {message}")
+        else:
+            print(f"{datetime.datetime.now().strftime('%d.%b %Y %H:%M:%S')} <SiriusXM>: {message}")
 
     def is_logged_in(self):
         return 'SXMDATA' in self.session.cookies
@@ -4509,13 +4633,13 @@ class SiriusXM:
 
         res = self.session.get(self.REST_FORMAT.format(method), params=params)
         if res.status_code != 200:
-            self.log('Received status code {} for method \'{}\''.format(res.status_code, method))
+            self.log(f"Received status code {res.status_code} for method '{method}'")
             return None
 
         try:
             return res.json()
         except ValueError:
-            self.log('Error decoding json for method \'{}\''.format(method))
+            self.log(f"Error decoding json for method '{method}'")
             return None
 
     def post(self, method, postdata, authenticate=True):
@@ -4525,13 +4649,13 @@ class SiriusXM:
 
         res = self.session.post(self.REST_FORMAT.format(method), data=json.dumps(postdata))
         if res.status_code != 200:
-            self.log('Received status code {} for method \'{}\''.format(res.status_code, method))
+            self.log(f"Received status code {res.status_code} for method '{method}'")
             return None
 
         try:
             return res.json()
         except ValueError:
-            self.log('Error decoding json for method \'{}\''.format(method))
+            self.log(f"Error decoding json for method '{method}'")
             return None
 
     def login(self):
@@ -4606,7 +4730,6 @@ class SiriusXM:
             self.log('Error parsing json response for authentication')
             return False
 
-
     def get_sxmak_token(self):
         try:
             return self.session.cookies['SXMAKTOKEN'].split('=', 1)[1].split(',', 1)[0]
@@ -4637,7 +4760,6 @@ class SiriusXM:
         if not data:
             return None
 
-        # get status
         try:
             status = data['ModuleListResponse']['status']
             message = data['ModuleListResponse']['messages'][0]['message']
@@ -4646,8 +4768,7 @@ class SiriusXM:
             self.log('Error parsing json response for playlist')
             return None
 
-        # login if session expired
-        if message_code == 201 or message_code == 208:
+        if message_code in [201, 208]:
             if max_attempts > 0:
                 self.log('Session expired, logging in and authenticating')
                 if self.authenticate():
@@ -4660,15 +4781,15 @@ class SiriusXM:
                 self.log('Reached max attempts for playlist')
                 return None
         elif message_code != 100:
-            self.log('Received error {} {}'.format(message_code, message))
+            self.log(f'Received error {message_code} {message}')
             return None
 
-        # get m3u8 url
         try:
             playlists = data['ModuleListResponse']['moduleList']['modules'][0]['moduleResponse']['liveChannelData']['hlsAudioInfos']
         except (KeyError, IndexError):
             self.log('Error parsing json response for playlist')
             return None
+
         for playlist_info in playlists:
             if playlist_info['size'] == 'LARGE':
                 playlist_url = playlist_info['url'].replace('%Live_Primary_HLS%', self.LIVE_PRIMARY_HLS)
@@ -4676,8 +4797,6 @@ class SiriusXM:
                 return self.playlists[channel_id]
 
         return None
-
-
 
     def get_playlist_variant_url(self, url):
         params = {
@@ -4688,73 +4807,16 @@ class SiriusXM:
         res = self.session.get(url, params=params)
 
         if res.status_code != 200:
-            self.log('Received status code {} on playlist variant retrieval'.format(res.status_code))
+            self.log(f"Received status code {res.status_code} on playlist variant retrieval")
             return None
-        
-        for x in res.text.split('\n'):
-            if x.rstrip().endswith('.m3u8'):
-                # first variant should be 256k one
-                return '{}/{}'.format(url.rsplit('/', 1)[0], x.rstrip())
-        
+
+        for line in res.text.split('\n'):
+            if line.rstrip().endswith('.m3u8'):
+                return f"{url.rsplit('/', 1)[0]}/{line.rstrip()}"
+
         return None
 
-    def get_playlist(self, name, use_cache=True):
-        guid, channel_id = self.get_channel(name)
-        if not guid or not channel_id:
-            self.log('No channel for {}'.format(name))
-            return None
-
-        url = self.get_playlist_url(guid, channel_id, use_cache)
-        params = {
-            'token': self.get_sxmak_token(),
-            'consumer': 'k2',
-            'gupId': self.get_gup_id(),
-        }
-        res = self.session.get(url, params=params)
-
-        if res.status_code == 403:
-            self.log('Received status code 403 on playlist, renewing session')
-            return self.get_playlist(name, False)
-
-        if res.status_code != 200:
-            self.log('Received status code {} on playlist variant'.format(res.status_code))
-            return None
-
-        # add base path to segments
-        base_url = url.rsplit('/', 1)[0]
-        base_path = base_url[8:].split('/', 1)[1]
-        lines = res.text.split('\n')
-        for x in range(len(lines)):
-            if lines[x].rstrip().endswith('.aac'):
-                lines[x] = '{}/{}'.format(base_path, lines[x])
-        return '\n'.join(lines)
-
-    def get_segment(self, path, max_attempts=5):
-        url = '{}/{}'.format(self.LIVE_PRIMARY_HLS, path)
-        params = {
-            'token': self.get_sxmak_token(),
-            'consumer': 'k2',
-            'gupId': self.get_gup_id(),
-        }
-        res = self.session.get(url, params=params)
-
-        if res.status_code == 403:
-            if max_attempts > 0:
-                self.log('Received status code 403 on segment, renewing session')
-                self.get_playlist(path.split('/', 2)[1], False)
-                return self.get_segment(path, max_attempts - 1)
-            else:
-                self.log('Received status code 403 on segment, max attempts exceeded')
-                return None
-
-        if res.status_code != 200:
-            self.log('Received status code {} on segment'.format(res.status_code))
-            return None
-
-        return res.content
-    
     def get_channels(self):
-        # download channel list if necessary
         if not self.channels:
             postdata = {
                 'moduleList': {
@@ -4773,22 +4835,23 @@ class SiriusXM:
             data = self.post('get', postdata)
             if not data:
                 self.log('Unable to get channel list')
-                return (None, None)
+                return []
+
             try:
                 self.channels = data['ModuleListResponse']['moduleList']['modules'][0]['moduleResponse']['contentData']['channelListing']['channels']
             except (KeyError, IndexError):
                 self.log('Error parsing json response for channels')
                 return []
-        za = 0
-        for za in self.channels[za]:
-            print(za)
-        x = self.channels[1]
-        print(x.get('name', '').lower(), x.get('channelId', '').lower(), x.get('channelGuid', '').lower())         
+
         return self.channels
 
     def get_channel(self, name):
         name = name.lower()
-        for x in self.get_channels():
-            if x.get('name', '').lower() == name or x.get('channelId', '').lower() == name or x.get('siriusChannelNumber', '').lower() == name or x.get('channelGuid') == name:
-                return (x['channelGuid'], x['channelId'])
+        for channel in self.get_channels():
+            if (channel.get('name', '').lower() == name or
+                channel.get('channelId', '').lower() == name or
+                channel.get('siriusChannelNumber', '').lower() == name or
+                channel.get('channelGuid') == name):
+                return (channel['channelGuid'], channel['channelId'])
+
         return (None, None)
