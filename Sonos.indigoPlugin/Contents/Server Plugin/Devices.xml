@@ -72,6 +72,12 @@
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
 
+			<State id="ZP_VOLUME_FIXED">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Volume</TriggerLabel>
+				<ControlPageLabel>Volume</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
 			
 			<State id="ZP_VOLUME_MASTER">
 				<ValueType>Integer</ValueType>
@@ -262,6 +268,17 @@
 				<ControlPageLabel>Group Name</ControlPageLabel>
 				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
 			</State>
+
+
+			<State id="Grouped">
+				<ValueType boolType="TrueFalse">Boolean</ValueType>
+				<TriggerLabel>Grouped</TriggerLabel>
+				<ControlPageLabel>Grouped</ControlPageLabel>
+				<ControlPageLabelPrefix>State is</ControlPageLabelPrefix>
+			</State>
+
+
+
 			<State id="ZP_CurrentTrack">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Current Track Number</TriggerLabel>

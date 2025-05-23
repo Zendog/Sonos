@@ -32,4 +32,12 @@
         <CallbackMethod>menuDumpGroups</CallbackMethod>
     </MenuItem>
 
+
+
+    <MenuItem id="AuditGroupStates">
+        <Name>Audit Group States</Name>
+        <CallbackMethod>menuAuditGroupStates</CallbackMethod>
+    </MenuItem>
+
+
 </MenuItems>

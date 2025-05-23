@@ -194,6 +194,16 @@ class Plugin(indigo.PluginBase):
         self.Sonos.DeleteandDefine_SiriusXMCache()
 
 
+    def menuDumpGrouped(self):
+        if not self.Sonos or not hasattr(self.Sonos, "dump_grouped_state_to_log"):
+            self.logger.warning("🚫 Sonos instance or dump method is missing.")
+            return
+
+    def menuDumpGrouped(self):
+        self.logger.info("📦 Invoking plugin → actionAuditGroupStates()...")
+        self.actionAuditGroupStates(None)
+
+
 
 
     #################################################################################################
@@ -277,6 +287,10 @@ class Plugin(indigo.PluginBase):
 
             self.Sonos.startup()  # ✅ <-- This was previously commented out but now active
             self.display_plugin_information()
+
+            #self.logger.warning("🔎 Dumping state keys for all Sonos devices:")
+            #for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            #    self.logger.warning(f"Device '{dev.name}' states: {list(dev.states.keys())}") 
 
             self.logger.info("Plugin startup ended.")
 
@@ -626,6 +640,26 @@ class Plugin(indigo.PluginBase):
             menu.append(("none", "No channels available"))
 
         return menu
+
+
+    # Called by MenuAction (from Plugin menu)
+    def menuAuditGroupStates(self):
+        self.logger.info("🔎 Menu-triggered Sonos Group States audit...")
+        self.dumpGroupedAudit()
+
+    # Called by Control Page / Trigger Action
+    def actionAuditGroupStates(self, pluginAction):
+        self.logger.info("🔎 ControlPage-triggered Sonos Group States audit...")
+        self.dumpGroupedAudit()
+
+    # Shared logic
+    def dumpGroupedAudit(self):
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            group_coordinator = dev.states.get("GROUP_Coordinator", "n/a")
+            group_name = dev.states.get("GROUP_Name", "n/a")
+            group_grouped = dev.states.get("Grouped", "n/a")
+
+            self.logger.info(f"📊 Device '{dev.name}': Coordinator={group_coordinator}, Group='{group_name}', Grouped={group_grouped}")
 
 
 ###

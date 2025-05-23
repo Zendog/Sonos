@@ -184,7 +184,7 @@ uri_mp3radio = "x-rincon-mp3radio:"
 uri_container = "x-rincon-cpcontainer"
 
 ZoneGroupStates = {
-    'ZP_ALBUM', 'ZP_ARTIST', 'ZP_CREATOR', 'ZP_TRACK', 'ZP_NALBUM',
+    'ZP_ALBUM', 'ZP_ARTIST', 'ZP_SOURCE', 'ZP_MUTE','ZP_CREATOR', 'ZP_TRACK', 'ZP_NALBUM',
     'ZP_NART', 'ZP_NARTIST', 'ZP_NCREATOR', 'ZP_NTRACK', 'ZP_CurrentTrack',
     'ZP_CurrentTrackURI', 'ZP_DURATION', 'ZP_RELATIVE', 'ZP_INFO',
     'ZP_STATION', 'ZP_STATE'
@@ -240,11 +240,29 @@ class SonosPlugin(object):
         from sxm import SXMClient, RegionChoice, XMChannel
 
 
-        self.httpd = None
-        self.httpd_thread = None
+        self.logger = logging.getLogger("Plugin.Sonos")
+        self.logger.info(f"Initializing SonosPlugin... [{uuid.uuid4()}]")
+
+        import threading
 
         self.plugin = plugin
         self.pluginPrefs = pluginPrefs  # ✅ Must be assigned first
+
+
+        self.last_zone_group_state_hash = None
+        self.zone_group_state_lock = threading.Lock()
+
+        self.plugin = plugin
+        self.pluginPrefs = pluginPrefs
+        self.logger = logging.getLogger("Plugin.Sonos")
+        self.soco_by_ip = {}
+        self.ip_to_indigo_device = {}
+        self.uuid_to_soco = {}
+        self.zone_group_state_cache = {}  # ✅ ensure this exists early
+
+        self.httpd = None
+        self.httpd_thread = None
+
 
         self.targetSonosSubnet = self.pluginPrefs.get("sonosTargetSubnet", "192.168.80.0/24")
 
@@ -265,16 +283,7 @@ class SonosPlugin(object):
 
         # ... continue your normal init process ...
 
-        import uuid
-        import os
-        import json
-        from sxm import SXMClient, RegionChoice, XMChannel
 
-        self.logger = logging.getLogger("Plugin.Sonos")
-        self.logger.info(f"Initializing SonosPlugin... [{uuid.uuid4()}]")
-
-        self.plugin = plugin
-        self.pluginPrefs = pluginPrefs
         self.globals = plugin.globals
 
         # Init internal structures
@@ -325,6 +334,7 @@ class SonosPlugin(object):
         self.last_siriusxm_guid_by_dev = {}
         self.soco_by_ip = {}
         self.soco_devices = {}
+        self.ip_to_indigo_device = {}
 
         # Hardcoded fallback test entries
         self.siriusxm_guid_map.update({
@@ -345,21 +355,19 @@ class SonosPlugin(object):
         # At __init__, add:
         self.device_zone_ips = {}
 
-    ### End of Initialization
+        self.parsed_zone_group_state_by_ip = {}
 
+    ### End of Initialization
 
 
     ############################################################################################
     ### Actiondirect List Processing
     ############################################################################################
 
-
-############################################################################################
-### Actiondirect List Processing
-############################################################################################
-
     def actionDirect(self, pluginAction, action_id_override=None):
         try:
+            self.logger.warning("🧪 [LOG 0] Entered actionDirect")
+
             # Normalize simplified override names into internal action IDs
             action_map = {
                 "Play": "actionPlay",
@@ -377,11 +385,11 @@ class SonosPlugin(object):
                 "BassDown": "actionBassDown",
                 "TrebleUp": "actionTrebleUp",
                 "TrebleDown": "actionTrebleDown",
-                "setStandalone": "actionZP_setStandalone",
-                "actionsetStandalone": "actionZP_setStandalone",
-                "setStandalones": "actionZP_setStandalones",
+                "setStandalone": "setStandalone",
+                "actionsetStandalone": "setStandalone",
+                "setStandalones": "setStandalones",
+                "actionsetStandalones": "setStandalones",
                 "addPlayerToZone": "actionZP_addPlayerToZone",
-                "addPlayersToZone": "actionZP_addPlayersToZone",
                 "GroupMuteToggle": "actionGroupMuteToggle",
                 "GroupMuteOn": "actionGroupMuteOn",
                 "GroupMuteOff": "actionGroupMuteOff",
@@ -400,36 +408,341 @@ class SonosPlugin(object):
             }
 
             raw_key = action_id_override or pluginAction.pluginTypeId
+            self.logger.warning(f"🧪 [LOG 1] raw_key: {raw_key}")
             action_key = action_map.get(raw_key, raw_key)
             action_id = action_key
+            self.logger.warning(f"🧪 [LOG 2] action_id resolved to: {action_id}")
 
-            device_id = int(pluginAction.deviceId)
-            self.safe_debug(f"⚡ Action received: {action_id} for device ID {device_id}")
-            self.safe_debug(f"🧭 Final resolved action_id: {action_id}")
-
-            dev = indigo.devices[device_id]
-            zoneIP = dev.address
-
-            # Table-driven dispatch with normalized handler signatures
+            # Dispatch handler mapping (global or device-aware)
             dispatch_table = {
                 "SetSiriusXMChannel": lambda p, d, z: self.handleAction_SetSiriusXMChannel(p, d, z),
                 "actionZP_SiriusXM": lambda p, d, z: self.handleAction_ZP_SiriusXM(p, d, z),
                 "actionZP_Pandora": lambda p, d, z: self.handleAction_ZP_Pandora(p, d, z, p.props),
                 "actionChannelUp": lambda p, d, z: self.handleAction_ChannelUp(p, d, z),
                 "actionChannelDown": lambda p, d, z: self.handleAction_ChannelDown(p, d, z),
-                "actionZP_setStandalone": lambda p, d, z: self.handleAction_ZP_setStandalone(p, d, z),
+                "actionZP_addPlayerToZone": lambda p, d, z: self.handleAction_ZP_addPlayerToZone(p, d, z),
                 "actionQ_Shuffle": lambda p, d, z: self.handleAction_Q_Shuffle(p, d, z),
                 "actionQ_Crossfade": lambda p, d, z: self.handleAction_Q_Crossfade(p, d, z),
             }
 
+
+            device_id = int(pluginAction.deviceId)
+            self.logger.warning(f"🧪 [LOG 3] pluginAction.deviceId: {device_id}")
+
+            # === Global Actions (e.g., from Control Pages) ===
+            if device_id == 0:
+                self.logger.warning(f"🧪 [LOG 3.5] Global action (deviceId = 0) detected: {action_id}")
+
+                if action_id == "setStandalones":
+                    zones = []
+                    for x in range(1, 13):
+                        ivar = f'zp{x}'
+                        val = pluginAction.props.get(ivar)
+                        if val and val != "00000":
+                            zones.append(val)
+
+                    for item in zones:
+                        try:
+                            dev = indigo.devices[int(item)]
+                            self.logger.info(f"🔁 Un-grouping device: {dev.name}")
+                            if dev.states.get("GROUP_Coordinator") == "true":
+                                self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport",
+                                              "BecomeCoordinatorOfStandaloneGroup", "")
+                            self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport",
+                                          "SetAVTransportURI",
+                                          f"<CurrentURI>x-rincon-queue:{dev.states['ZP_LocalUID']}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                        except Exception as e:
+                            self.logger.error(f"❌ Failed to ungroup device {item}: {e}")
+                    return
+
+                else:
+                    self.logger.error(f"❌ Global action_id '{action_id}' not handled")
+                    return
+
+            # === Device-Based Actions ===
+            try:
+                dev = indigo.devices[device_id]
+                self.logger.warning(f"🧪 [LOG 4] dev.name: {dev.name}, ID: {dev.id}")
+            except KeyError:
+                self.logger.error(f"❌ Device ID {device_id} not found in Indigo database")
+                return
+
+            # Determine coordinator device and IP
+            coordinator_dev = self.getCoordinatorDevice(dev)
+            coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
+
+            # Assign correct target IP
+            zoneIP = coordinator_ip
+            if coordinator_dev.id != dev.id:
+                self.logger.warning(f"🔁 Redirecting control from slave {dev.name} to coordinator {coordinator_dev.name} at {zoneIP}")
+            else:
+                self.logger.debug(f"✅ {dev.name} is the coordinator — using direct control")
+
+            self.logger.warning(f"🧪 [LOG 5] zoneIP resolved to: {zoneIP}")
+            self.logger.warning(f"🧪 [LOG 6] dev.states keys: {list(dev.states.keys())}")
+            self.logger.warning(f"🧪 [LOG 7] dev.pluginProps keys: {list(dev.pluginProps.keys())}")
+            self.logger.warning(f"🧪 [LOG 8] Grouped: {dev.states.get('Grouped', 'MISSING')}, GROUP_Coordinator: {dev.states.get('GROUP_Coordinator', 'MISSING')}")
+ 
+
+
+            # Call matching handler
             if action_id in dispatch_table:
                 dispatch_table[action_id](pluginAction, dev, zoneIP)
                 return
 
-
-
-
             # Inline action handlers follow...
+            # Get Indigo device and coordinator
+            dev = indigo.devices[pluginAction.deviceId]
+            coordinator_dev = self.getCoordinatorDevice(dev)
+            zoneIP = coordinator_dev.pluginProps.get("address", "").strip()
+
+            # Redirect zoneIP if grouped
+            if coordinator_dev.id != dev.id:
+                self.logger.debug(f"🔁 Redirecting action from slave {dev.name} to coordinator {coordinator_dev.name}")
+            else:
+                self.logger.debug(f"✅ {dev.name} is the coordinator — executing command directly")
+
+            # === Transport Actions ===
+
+            if action_id == "Play":
+                self.plugin.debugLog("Sonos Action: Play")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                self.logger.info(f"▶️ Play sent to {coordinator_dev.name}")
+
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_STATE", "PLAYING")
+                    self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: PLAYING")
+
+                return
+
+            if action_id == "Pause":
+                self.plugin.debugLog("Sonos Action: Pause")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
+                self.logger.info(f"⏸ Pause sent to {coordinator_dev.name}")
+
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_STATE", "PAUSED_PLAYBACK")
+                    self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: PAUSED_PLAYBACK")
+
+                return
+
+            if action_id == "Stop":
+                self.plugin.debugLog("Sonos Action: Stop")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Stop", "")
+                self.logger.info(f"⏹ Stop sent to {coordinator_dev.name}")
+
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_STATE", "STOPPED")
+                    self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: STOPPED")
+
+                return
+
+            if action_id == "TogglePlay":
+                self.plugin.debugLog("Sonos Action: Toggle Play")
+                current_state = coordinator_dev.states.get("ZP_STATE", "").upper()
+
+                if current_state == "PLAYING":
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
+                    self.logger.info(f"⏸ TogglePlay → Pause sent to {coordinator_dev.name}")
+                    new_state = "PAUSED_PLAYBACK"
+                else:
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                    self.logger.info(f"▶️ TogglePlay → Play sent to {coordinator_dev.name}")
+                    new_state = "PLAYING"
+
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_STATE", new_state)
+                    self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: {new_state}")
+
+                return
+
+            elif action_id == "MuteToggle":
+                self.plugin.debugLog("Sonos Action: Mute Toggle")
+                if int(dev.states["ZP_MUTE"]) == 0:
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
+                    indigo.server.log("ZonePlayer: %s, Mute On" % dev.name)
+                else:
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                    indigo.server.log("ZonePlayer: %s, Mute Off" % dev.name)
+
+            # Mute Controls
+            if action_id == "MuteOn":
+                self.plugin.debugLog("Sonos Action: Mute On")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
+                indigo.server.log("ZonePlayer: %s, Mute On" % dev.name)
+
+            elif action_id == "MuteOff":
+                self.plugin.debugLog("Sonos Action: Mute Off")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
+                indigo.server.log("ZonePlayer: %s, Mute Off" % dev.name)
+
+            # Group Mute Controls
+            elif action_id == "GroupMuteToggle":
+                self.plugin.debugLog("Sonos Action: Group Mute Toggle")
+                if int(self.parseCurrentMute(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))) == 0:
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
+                    indigo.server.log("ZonePlayer Group: %s, Mute On" % dev.name)
+                else:
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
+                    indigo.server.log("ZonePlayer Group: %s, Mute Off" % dev.name)
+
+            elif action_id == "GroupMuteOn":
+                self.plugin.debugLog("Sonos Action: Group Mute On")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
+                indigo.server.log("ZonePlayer Group: %s, Mute On" % dev.name)
+
+            elif action_id == "GroupMuteOff":
+                self.plugin.debugLog("Sonos Action: Group Mute Off")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
+                indigo.server.log("ZonePlayer Group: %s, Mute Off" % dev.name)
+
+            # Group Volume Controls
+            elif action_id == "GroupVolume":
+                self.plugin.debugLog("Sonos Action: Group Volume")
+                current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                new_volume = int(eval(self.plugin.substitute(pluginAction.props.get("setting"))))
+                if new_volume < 0 or new_volume > 100:
+                    new_volume = current_volume
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupVolume", f"<DesiredVolume>{new_volume}</DesiredVolume>")
+                indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+
+            elif action_id == "RelativeGroupVolume":
+                self.plugin.debugLog("Sonos Action: Relative Group Volume")
+                current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                adjustment = pluginAction.props.get("setting")
+                try:
+                    new_volume = int(current_volume) + int(adjustment)
+                except Exception:
+                    new_volume = current_volume
+                new_volume = max(0, min(new_volume, 100))
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", f"<Adjustment>{adjustment}</Adjustment>")
+                indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+
+            elif action_id == "GroupVolumeDown":
+                self.plugin.debugLog("Sonos Action: Group Volume Down")
+                current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                new_volume = max(0, int(current_volume) - 2)
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>-2</Adjustment>")
+                indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+
+            elif action_id == "GroupVolumeUp":
+                self.plugin.debugLog("Sonos Action: Group Volume Up")
+                current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
+                new_volume = min(100, int(current_volume) + 2)
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>2</Adjustment>")
+                indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+
+            elif action_id == "Q_Crossfade":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                mode = pluginAction.props.get("setting")
+                if mode == 0:
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>0</CrossfadeMode>")
+                elif mode == 1:
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>1</CrossfadeMode>")
+            elif action_id == "Q_Repeat":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                repeat = bool(int(pluginAction.props.get("setting")))
+                repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
+                shuffle = self.boolConv(dev.states["Q_Shuffle"])
+                if repeat == True:
+                    PlayMode = self.QMode(repeat, False, shuffle)
+                else:
+                    PlayMode = self.QMode(repeat, repeat_one, shuffle)
+                self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+            elif action_id == "Q_RepeatOne":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                repeat_one = bool(int(pluginAction.props.get("setting")))
+                repeat = self.boolConv(dev.states["Q_Repeat"])
+                shuffle = self.boolConv(dev.states["Q_Shuffle"])
+                if repeat_one == True:
+                    PlayMode = self.QMode(False, repeat_one, shuffle)
+                else:
+                    PlayMode = self.QMode(repeat, repeat_one, shuffle)
+                self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+            elif action_id == "Q_RepeatToggle":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                repeat = self.boolConv(dev.states["Q_Repeat"])
+                repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
+                shuffle = self.boolConv(dev.states["Q_Shuffle"])
+                if repeat == False and repeat_one == False:
+                    PlayMode = self.QMode(True, False, shuffle)
+                elif repeat == True and repeat_one == False:
+                    PlayMode = self.QMode(False, True, shuffle)
+                else:
+                    PlayMode = self.QMode(False, False, shuffle)
+                self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+            elif action_id == "Q_Shuffle":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                shuffle = bool(int(pluginAction.props.get("setting")))
+                repeat = self.boolConv(dev.states["Q_Repeat"])
+                repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
+                PlayMode = self.QMode(repeat, repeat_one, shuffle)
+                self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+            elif action_id == "Q_ShuffleToggle":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = CoordinatorIP
+                repeat = self.boolConv(dev.states["Q_Repeat"])
+                repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
+                shuffle = self.boolConv(dev.states["Q_Shuffle"])
+                if shuffle == True:
+                    PlayMode = self.QMode(repeat, repeat_one, False)
+                else:
+                    PlayMode = self.QMode(repeat, repeat_one, True)
+                self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+            elif action_id == "Q_Clear":
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/Queue", "RemoveAllTracks", "<QueueID>0</QueueID><UpdateID>0</UpdateID>")
+                indigo.server.log("ZonePlayer: %s, Clear Queue" % dev.name)
+
+            elif action_id == "Q_Save":
+                self.updateZoneTopology(dev)
+                if dev.states["GROUP_Coordinator"] == "false":
+                    self.plugin.debugLog("ZonePlayer: %s, Cannot Save Queue for Slave" % dev.name)
+                else:
+                    self.plugin.sleep(0.5)
+                    PlaylistName = pluginAction.props.get("setting")
+                    ZP  = self.parseBrowseNumberReturned(self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
+                    if PlaylistName == "Indigo_" + dev.states['ZP_LocalUID']:
+                        self.updateStateOnServer (dev, "Q_Number", ZP)
+                    if int(ZP) > 0:
+                        ObjectID = ""
+                        for plist in Sonos_Playlists:
+                            if plist[1] == PlaylistName:
+                                ObjectID = plist[2]
+                        AssignedObjectID = self.parseAssignedObjectID(self.SOAPSend (zoneIP, "/MediaRenderer", "/Queue", "SaveAsSonosPlaylist", "<QueueID>0</QueueID><Title>" + PlaylistName + "</Title><ObjectID>" + ObjectID + "</ObjectID>"))
+                        if ObjectID == "":
+                            ObjectID = AssignedObjectID
+                        if PlaylistName.find(dev.states['ZP_LocalUID']) > -1:
+                            self.updateStateOnServer (dev, "Q_ObjectID", ObjectID)
+
+                        self.plugin.debugLog ("ZonePlayer: %s, Save Queue: %s" % (dev.name, PlaylistName))
+                    else:
+                        if PlaylistName == "Indigo_" + dev.states['ZP_LocalUID']:
+                            ObjectID = ""
+                            for plist in Sonos_Playlists:
+                                if plist[1] == PlaylistName:
+                                    ObjectID = plist[2]
+                                    self.actionDirect(PA(dev.id, {"setting":ObjectID}), "CD_RemovePlaylist")
+                            self.updateStateOnServer (dev, "Q_ObjectID", "")
+                        self.plugin.debugLog ("ZonePlayer: %s, Nothing in Queue to Save" % dev.name)
+
+            elif action_id == "CD_RemovePlaylist":
+                ObjectID = pluginAction.props.get("setting")
+                for plist in Sonos_Playlists:
+                    if plist[2] == ObjectID:
+                        PlaylistName = plist[1]
+                        self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "DestroyObject", "<ObjectID>" + ObjectID + "</ObjectID>")
+                    indigo.server.log ("ZonePlayer: %s, Remove Playlist: %s" % (dev.name, PlaylistName))
+
             if action_id == "actionBassUp":
                 current = int(dev.states.get("ZP_BASS", 0))
                 newVal = max(min(current + 1, 10), -10)
@@ -468,31 +781,71 @@ class SonosPlugin(object):
 
             elif action_id == "actionVolumeUp":
                 self.safe_debug("🧪 Matched action_id == actionVolumeUp")
-                current = int(dev.states.get("ZP_VOLUME_MASTER", 0))
+
+                coordinator_dev = self.getCoordinatorDevice(dev)
+                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
+                zoneIP = coordinator_ip
+
+                # Pull volume from coordinator (not the slave!)
+                current = int(coordinator_dev.states.get("ZP_VOLUME_MASTER", 0))
                 new_volume = min(100, current + 5)
+
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume",
                               f"<Channel>Master</Channel><DesiredVolume>{new_volume}</DesiredVolume>")
-                self.logger.info(f"🔊 Volume UP for {dev.name}: {current} → {new_volume}")
-                self.refresh_transport_state(zoneIP)
+
+                self.logger.info(f"🔊 Volume UP sent to {coordinator_dev.name}: {current} → {new_volume}")
+
+                # If this was initiated from a slave, update its visible state to match
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_VOLUME_MASTER", new_volume)
+                    self.safe_debug(f"🔁 Synced ZP_VOLUME_MASTER from {coordinator_dev.name} → {dev.name}")
+
                 return
 
             elif action_id == "actionVolumeDown":
-                current = int(dev.states.get("ZP_VOLUME_MASTER", 0))
+                self.safe_debug("🧪 Matched action_id == actionVolumeDown")
+
+                coordinator_dev = self.getCoordinatorDevice(dev)
+                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
+                zoneIP = coordinator_ip
+
+                current = int(coordinator_dev.states.get("ZP_VOLUME_MASTER", 0))
                 new_volume = max(0, current - 5)
+
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume",
                               f"<Channel>Master</Channel><DesiredVolume>{new_volume}</DesiredVolume>")
-                self.logger.info(f"🔉 Volume DOWN for {dev.name}: {current} → {new_volume}")
-                self.refresh_transport_state(zoneIP)
+
+                self.logger.info(f"🔉 Volume DOWN sent to {coordinator_dev.name}: {current} → {new_volume}")
+
+                if dev.id != coordinator_dev.id:
+                    dev.updateStateOnServer("ZP_VOLUME_MASTER", new_volume)
+                    self.safe_debug(f"🔁 Synced ZP_VOLUME_MASTER from {coordinator_dev.name} → {dev.name}")
+
                 return
 
             elif action_id == "actionMuteToggle":
-                raw_state = dev.states.get("ZP_MUTE", "unknown")
-                mute_state = raw_state.lower() == "true"
+                self.safe_debug("🧪 Matched action_id == actionMuteToggle")
+
+                coordinator_dev = self.getCoordinatorDevice(dev)
+                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
+                zoneIP = coordinator_ip
+
+                # Get mute state from coordinator, not slave
+                raw_state = coordinator_dev.states.get("ZP_MUTE", "unknown")
+                mute_state = str(raw_state).lower() == "true"
+
                 mute_val = "0" if mute_state else "1"
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute",
                               f"<Channel>Master</Channel><DesiredMute>{mute_val}</DesiredMute>")
-                self.logger.info(f"🎚 Mute TOGGLE for {dev.name}: {'Off' if mute_state else 'On'}")
-                self.refresh_transport_state(zoneIP)
+
+                self.logger.info(f"🎚 Mute TOGGLE sent to {coordinator_dev.name}: {'Off' if mute_state else 'On'}")
+
+                # Optionally update the slave state immediately
+                if dev.id != coordinator_dev.id:
+                    new_state = "false" if mute_state else "true"
+                    dev.updateStateOnServer("ZP_MUTE", new_state)
+                    self.safe_debug(f"🔁 Synced ZP_MUTE from {coordinator_dev.name} → {dev.name}: {new_state}")
+
                 return
 
             elif action_id == "actionMuteOn":
@@ -548,6 +901,63 @@ class SonosPlugin(object):
                     self.logger.info(f"⏸ Pause for {dev.name}")
                 return
 
+            elif action_id == "addPlayersToZone":
+                zones = []
+                x = 1
+                while x <= 12:
+                    ivar = 'zp' + str(x)
+                    if pluginAction.props.get(ivar) not in ["", None, "00000"]: 
+                        zones.append(pluginAction.props.get(ivar))
+                    x = x + 1
+
+                for item in zones:
+                    indigo.server.log("add zone to group: %s" % item)
+                    dev_dest = indigo.devices[int(item)]
+                    self.SOAPSend (dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+
+
+            elif action_id == "setStandalone":
+                indigo.server.log(f"🔀 Request to remove zone from group: {dev.name}")
+
+                coordinator_dev = self.getCoordinatorDevice(dev)
+                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
+                coordinator_uid = coordinator_dev.states.get("ZP_LocalUID", "").strip()
+
+                if not coordinator_ip or not coordinator_uid:
+                    self.logger.error(f"❌ Cannot resolve IP or UID for coordinator device: {coordinator_dev.name}")
+                    return
+
+                try:
+                    # Send ungrouping command
+                    self.SOAPSend(
+                        coordinator_ip,
+                        "/MediaRenderer",
+                        "/AVTransport",
+                        "BecomeCoordinatorOfStandaloneGroup",
+                        ""
+                    )
+
+                    time.sleep(1.0)  # Allow Sonos time to stabilize before reassigning queue
+
+                    # Set playback queue on the appropriate device
+                    target_uid = dev.states.get("ZP_LocalUID", "").strip()
+                    if not target_uid:
+                        self.logger.error(f"❌ Missing ZP_LocalUID for {dev.name}")
+                        return
+
+                    self.SOAPSend(
+                        coordinator_ip,
+                        "/MediaRenderer",
+                        "/AVTransport",
+                        "SetAVTransportURI",
+                        f"<CurrentURI>x-rincon-queue:{target_uid}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>"
+                    )
+
+                    self.logger.info(f"✅ {dev.name} ungrouped and reassigned queue")
+
+                except Exception as e:
+                    self.logger.error(f"❌ Failed to set {dev.name} standalone: {e}")
+
             elif action_id == "ZP_LIST":
                 self.actionZP_LIST(pluginAction, dev)
                 return
@@ -560,15 +970,40 @@ class SonosPlugin(object):
             self.logger.error(f"❌ actionDirect exception: {e}")
 
 
-### End of Actiondirect List Processing
-
- 
     ### End of Actiondirect List Processing
 
 
     ############################################################################################
     ### Handleaction definitions
     ############################################################################################
+
+
+
+    def handleAction_ZP_addPlayerToZone(self, pluginAction, dev, zoneIP):
+        try:
+            dev_dest = indigo.devices[int(pluginAction.props.get("setting"))]
+            target_uid = str(dev.states.get('ZP_LocalUID', '')).strip()
+            target_ip = dev_dest.pluginProps.get("address", "").strip()
+
+            self.logger.warning(f"🔗 Requested: Add {dev.name} to group with {dev_dest.name}")
+            self.logger.warning(f"🔍 UID={target_uid}, IP={target_ip}")
+
+            if not target_uid or not target_ip:
+                self.logger.error(f"❌ Missing required UID or IP for joining zone: UID={target_uid}, IP={target_ip}")
+            else:
+                self.logger.info(f"➕ Adding {dev.name} to group led by {dev_dest.name} @ {target_ip}")
+                self.SOAPSend(
+                    target_ip,
+                    "/MediaRenderer",
+                    "/AVTransport",
+                    "SetAVTransportURI",
+                    f"<CurrentURI>x-rincon:{target_uid}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>"
+                )
+
+        except Exception as e:
+            self.logger.error(f"❌ actionZP_addPlayerToZone failed: {e}")
+
+
 
 
 
@@ -1729,9 +2164,6 @@ class SonosPlugin(object):
     ############################################################################################
 
 
-
-
-
     def SiriusXMChannelChanger(self, dev, guid):
         try:
             zoneIP = dev.pluginProps.get("address")
@@ -1752,7 +2184,6 @@ class SonosPlugin(object):
             ch_number = channel.get("channel_number", "?")
             ch_name = channel.get("name", "Unknown")
             album_art = channel.get("albumArtURI", "")
-
             title = f"CH {ch_number} - {ch_name}"
             uri = f"x-sonosapi-hls:channel-linear:{guid}?sid=37&flags=8232&sn=3"
 
@@ -1781,13 +2212,25 @@ class SonosPlugin(object):
                 soco_dev = SoCo(zoneIP)
                 self.soco_by_ip[zoneIP] = soco_dev
 
-            soco_dev.avTransport.SetAVTransportURI([
-                ('InstanceID', 0),
-                ('CurrentURI', uri),
-                ('CurrentURIMetaData', metadata),
-            ])
-            soco_dev.play()
+            # 🎯 Attempt SetAVTransportURI with error handling
+            try:
+                soco_dev.avTransport.SetAVTransportURI([
+                    ('InstanceID', 0),
+                    ('CurrentURI', uri),
+                    ('CurrentURIMetaData', metadata),
+                ])
+                time.sleep(0.5)
+                soco_dev.play()
 
+            except Exception as upnp_err:
+                self.logger.error(f"❌ UPNP Error: {upnp_err}")
+                self.logger.error(f"❌ Offending Command -> zoneIP: {zoneIP}, URI: {uri}")
+                self.logger.error(f"📦 Metadata Sent:\n{metadata}")
+                if "UPnPError" in str(upnp_err) and "402" in str(upnp_err):
+                    self.logger.warning(f"⚠️ Sonos rejected the SiriusXM stream due to invalid arguments (UPnP 402). Check URI/metadata formatting.")
+                return  # Skip further state updates on failure
+
+            # ✅ Update states after success
             if "channel_number" in channel and "name" in channel:
                 channel_number = channel["channel_number"]
                 channel_name = channel["name"]
@@ -1796,7 +2239,7 @@ class SonosPlugin(object):
 
             self.logger.info(f"✅ Successfully changed {dev.name} to {title}")
 
-            # --- Save last known SiriusXM channel number ---
+            # 💾 Save last known SiriusXM channel
             if not hasattr(self, "last_known_sxm_channel"):
                 self.last_known_sxm_channel = {}
 
@@ -1809,8 +2252,6 @@ class SonosPlugin(object):
 
         except Exception as e:
             self.logger.error(f"❌ SiriusXMChannelChanger failed for {dev.name}: {e}")
-
-
 
 
 
@@ -2406,6 +2847,20 @@ class SonosPlugin(object):
             self.logger.error(f"❌ actionPrevious error for {indigo_device.name}: {e}")
 
 
+    def actionStates(self, pluginAction, action):
+        indigo.server.log("did i hit 2 ????", type="Sonos PY Plugin Msg: 6778: ")           
+        global SavedState
+        if action_id == "saveStates":
+            SavedState = []
+            for dev in indigo.devices.iter("self.ZonePlayer"):
+              if dev.enabled == True and dev.pluginProps["model"] != SONOS_SUB:
+                #ZP  = self.parseBrowseNumberReturned(self.SOAPSend (dev.pluginProps["address"], "/MediaServer", "/ContentDirectory", "Browse", "<ObjectID>Q:0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>0</StartingIndex><RequestedCount>1000</RequestedCount><SortCriteria></SortCriteria>"))
+                ZP = ""
+                ZP_CurrentURIMetaData = self.parseDirty(self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetMediaInfo", ""), "<CurrentURIMetaData>", "</CurrentURIMetaData>")
+                rel_time = self.parseRelTime(dev, self.SOAPSend (dev.pluginProps["address"], "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
+                SavedState.append((dev.states['ZP_LocalUID'], dev.states['Q_Crossfade'], dev.states['Q_Repeat'], dev.states['Q_Shuffle'], dev.states['ZP_MUTE'], dev.states['ZP_STATE'], dev.states['ZP_VOLUME'], dev.states['ZP_CurrentURI'], ZP_CurrentURIMetaData, dev.states['ZP_CurrentTrack'], dev.states['GROUP_Coordinator'], ZP, rel_time, dev.states['ZonePlayerUUIDsInGroup']))
+        elif action_id == "restoreStates":
+            pass
 
 
     def actionStop(self, indigo_device):
@@ -2455,7 +2910,7 @@ class SonosPlugin(object):
 
         # Cleanup old art before starting the server to reduce storage size and keep things tidy
         self.cleanup_old_artwork()        
-
+        self.logger.info(f"🖼️ Updated artwork 5")
 
         # Function to start the HTTP server and serve images
         def start_http_server():
@@ -2518,6 +2973,24 @@ class SonosPlugin(object):
                 self.logger.error("❌ rootZPIP is not set. Cannot fetch Sonos playlists.")
 
             self.logger.info("🕒 Deferring SiriusXM test playback for 'Office' until runConcurrentThread()")
+
+
+
+            self.logger.info("🔧 Starting up Sonos Plugin...")
+            self.build_ip_to_device_map()
+
+
+
+            self.logger.warning("🔎 Performing post-startup audit of Sonos device group states...")
+
+            for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                group_coordinator = dev.states.get("GROUP_Coordinator", "n/a")
+                group_name = dev.states.get("GROUP_Name", "n/a")
+                Grouped = dev.states.get("GROUP_Grouped", "n/a")
+
+                self.logger.info(f"📊 Device '{dev.name}': Coordinator={group_coordinator}, Group='{group_name}', Grouped={Grouped}")
+
+
 
         except Exception as sonos_startup_error:
             self.logger.error(f"❌ Error during Sonos startup: {sonos_startup_error}")
@@ -2666,33 +3139,50 @@ class SonosPlugin(object):
         self.safe_debug(f"✅ soco_by_ip[{indigo_device.address}] stored with SoCo {soco_device.uid}")
 
         def _log_subscription_result(service_name, sub_obj):
-            self.safe_debug(f"🔍 {service_name}.subscribe() returned: {sub_obj}")
-            self.safe_debug(f"🔍 {service_name} Subscription SID: {getattr(sub_obj, 'sid', 'No SID')}")
-            self.safe_debug(f"🔍 {service_name} Subscription type: {type(sub_obj)}")
+            sid = getattr(sub_obj, "sid", None)
+            if sid:
+                self.logger.info(f"🔒 {service_name} subscription confirmed for {indigo_device.name} | SID: {sid}")
+            else:
+                self.logger.error(f"❌ {service_name} subscription returned None SID for {indigo_device.name}")
+
+        def _subscribe_with_retry(service_attr, service_name):
+            try:
+                # Determine suppression before subscribing
+                is_coordinator = indigo_device.states.get("GROUP_Coordinator", False) in [True, "true", "True"]
+                bonded_keywords = ["sub", "surround", "boost"]
+                is_bonded = any(kw in model_name.lower() for kw in bonded_keywords)
+                if not is_coordinator or is_bonded:
+                    self.logger.debug(f"ℹ️ Skipping {service_name} subscription for {indigo_device.name} (bonded or non-coordinator)")
+                    return
+
+                self.logger.warning(f"🔔 Initiating subscription to {service_name} for {indigo_device.name}")
+                sub_obj = getattr(soco_device, service_attr).subscribe(auto_renew=True, strict=True)
+                _log_subscription_result(service_name, sub_obj)
+
+                sid = getattr(sub_obj, "sid", None)
+                if sid:
+                    sub_obj.callback = self.soco_event_handler
+                    self.soco_subs[indigo_device.id][service_name] = sub_obj
+                    return
+
+                # Retry once if SID is None
+                self.logger.warning(f"🔁 Retrying {service_name} subscription for {indigo_device.name} after None SID...")
+                sub_obj_retry = getattr(soco_device, service_attr).subscribe(auto_renew=True, strict=True)
+                sid_retry = getattr(sub_obj_retry, "sid", None)
+                if sid_retry:
+                    self.logger.info(f"✅ {service_name} retry successful | SID: {sid_retry}")
+                    sub_obj_retry.callback = self.soco_event_handler
+                    self.soco_subs[indigo_device.id][service_name] = sub_obj_retry
+                else:
+                    self.logger.error(f"❌ Retry {service_name} still returned None SID for {indigo_device.name}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to subscribe to {service_name} for {indigo_device.name}: {e}")
 
         # AVTransport
-        try:
-            self.logger.warning(f"🔔 Initiating subscription to AVTransport for {indigo_device.name}")
-            av_sub = soco_device.avTransport.subscribe(auto_renew=True, strict=True)
-            _log_subscription_result("AVTransport", av_sub)
-
-            av_sub.callback = self.soco_event_handler
-            self.soco_subs[indigo_device.id]["AVTransport"] = av_sub
-            self.logger.info(f"✅ Subscribed to AVTransport | SID: {getattr(av_sub, 'sid', 'N/A')}, Callback: {getattr(av_sub.callback, '__name__', 'None')}")
-        except Exception as e:
-            self.logger.error(f"❌ Failed to subscribe to AVTransport: {e}")
+        _subscribe_with_retry("avTransport", "AVTransport")
 
         # RenderingControl
-        try:
-            self.logger.warning(f"🔔 Initiating subscription to RenderingControl for {indigo_device.name}")
-            rc_sub = soco_device.renderingControl.subscribe(auto_renew=True, strict=True)
-            _log_subscription_result("RenderingControl", rc_sub)
-
-            rc_sub.callback = self.soco_event_handler
-            self.soco_subs[indigo_device.id]["RenderingControl"] = rc_sub
-            self.logger.info(f"✅ Subscribed to RenderingControl | SID: {getattr(rc_sub, 'sid', 'N/A')}, Callback: {getattr(rc_sub.callback, '__name__', 'None')}")
-        except Exception as e:
-            self.logger.error(f"❌ Failed to subscribe to RenderingControl: {e}")
+        _subscribe_with_retry("renderingControl", "RenderingControl")
 
         # Optional AudioIn
         if model_name.lower().startswith("connect") or "port" in model_name.lower():
@@ -2707,6 +3197,18 @@ class SonosPlugin(object):
             except Exception as e:
                 self.logger.error(f"❌ Failed to subscribe to AudioIn: {e}")
 
+        # ZoneGroupTopology
+        try:
+            self.logger.warning(f"🔔 Initiating subscription to ZoneGroupTopology for {indigo_device.name}")
+            zgt_sub = soco_device.zoneGroupTopology.subscribe(auto_renew=True, strict=True)
+            _log_subscription_result("ZoneGroupTopology", zgt_sub)
+
+            zgt_sub.callback = self.soco_event_handler
+            self.soco_subs[indigo_device.id]["ZoneGroupTopology"] = zgt_sub
+            self.logger.info(f"✅ Subscribed to ZoneGroupTopology | SID: {getattr(zgt_sub, 'sid', 'N/A')}, Callback: {getattr(zgt_sub.callback, '__name__', 'None')}")
+        except Exception as e:
+            self.logger.warning(f"⚠️ ZoneGroupTopology subscription failed for {indigo_device.name}: {e}")
+
         # Final Listener Check
         self.logger.warning(
             f"🛰 Listener running={event_listener.is_running}, "
@@ -2714,11 +3216,15 @@ class SonosPlugin(object):
         )
 
 
+
+
+
+
+
+
     ############################################################################################
     ### Start Device communications
     ############################################################################################
-
-
 
     def deviceStartComm(self, indigo_device):
         self.logger.warning(f"🧪 deviceStartComm CALLED for {indigo_device.name}")
@@ -2727,94 +3233,119 @@ class SonosPlugin(object):
             self.logger.info(f"🔌 Starting communication with Indigo device {indigo_device.name} ({indigo_device.address})")
             self.devices[indigo_device.id] = indigo_device
 
+            # Ensure lookup maps exist
+            if not hasattr(self, "soco_by_ip"):
+                self.soco_by_ip = {}
+            if not hasattr(self, "ip_to_indigo_device"):
+                self.ip_to_indigo_device = {}
+
             # 🖼️ Preload ZP_ART with default placeholder if missing
             if not indigo_device.states.get("ZP_ART"):
                 self.logger.warning(f"🖼️ Preloading ZP_ART with default placeholder for {indigo_device.name}")
+                self.logger.info(f"🖼️ Updated artwork 7")
                 indigo_device.updateStateOnServer("ZP_ART", "/images/no_album_art.png")
 
             # Force plugin to use upgraded SoCo library
-            import sys
-            import os
+            import sys, os
             upgraded_path = os.path.join(os.path.dirname(__file__), "soco-upgraded")
             if upgraded_path not in sys.path:
                 sys.path.insert(0, upgraded_path)
 
             import soco
             from soco import SoCo
-            import inspect
+            from soco.discovery import discover
 
-            # Confirm SoCo version and path
             self.logger.warning(f"🧪 SoCo loaded from: {getattr(soco, '__file__', 'unknown')}")
             self.logger.warning(f"🧪 SoCo version: {getattr(soco, '__version__', 'unknown')}")
 
             soco_device = None
 
+            # 🌐 First discovery attempt
             try:
                 self.logger.info("🔍 Performing SoCo discovery to find matching device...")
-                discovered = soco.discover()
+                discovered = discover(timeout=5)
                 if discovered:
                     for dev in discovered:
                         if dev.ip_address == indigo_device.address:
                             soco_device = dev
                             self.logger.warning(f"✅ Found and initialized SoCo device for {indigo_device.name} at {dev.ip_address}")
                             break
-                    if not soco_device:
-                        self.logger.warning(f"⚠️ No matching SoCo device found for {indigo_device.name}")
                 else:
                     self.logger.warning("❌ No Sonos devices discovered on the network.")
-            except Exception as soco_discovery_error:
-                self.logger.error(f"❌ SoCo discovery failed: {soco_discovery_error}")
+            except Exception as e:
+                self.logger.error(f"❌ SoCo discovery failed: {e}")
 
-            # 🔁 Fallback to direct SoCo creation if discovery missed it
+            # 🔁 Retry discovery before fallback
             if not soco_device:
-                self.logger.warning(f"⚠️ Discovery missed {indigo_device.name}, trying direct SoCo init...")
+                self.logger.warning(f"🔁 Retrying SoCo discovery before fallback for {indigo_device.name}")
+                try:
+                    discovered_retry = discover(timeout=5)
+                    if discovered_retry:
+                        for dev in discovered_retry:
+                            if dev.ip_address == indigo_device.address:
+                                soco_device = dev
+                                self.logger.warning(f"✅ Found device on retry for {indigo_device.name} at {dev.ip_address}")
+                                break
+                except Exception as e:
+                    self.logger.error(f"❌ Retry discovery failed: {e}")
+
+            # 🧯 Fallback if discovery still failed
+            if not soco_device:
+                self.logger.warning(f"⚠️ Discovery failed — falling back to direct SoCo init for {indigo_device.name}")
                 try:
                     soco_device = SoCo(indigo_device.address)
                     self.logger.warning(f"✅ Fallback SoCo created for {indigo_device.name} at {indigo_device.address}")
                 except Exception as e:
-                    self.logger.error(f"❌ Fallback SoCo init failed for {indigo_device.name}: {e}")
+                    self.logger.error(f"❌ Direct SoCo init failed for {indigo_device.name}: {e}")
+                    return
 
-            if soco_device:
-                # ✅ Store in lookup map
-                self.soco_by_ip[indigo_device.address] = soco_device
-                self.safe_debug(f"✅ soco_by_ip[{indigo_device.address}] stored with SoCo {getattr(soco_device, 'uid', 'unknown')}")
+            # ✅ Always store in lookup maps
+            self.soco_by_ip[indigo_device.address] = soco_device
+            self.ip_to_indigo_device[indigo_device.address] = indigo_device
+            self.safe_debug(f"✅ soco_by_ip[{indigo_device.address}] stored with SoCo {getattr(soco_device, 'uid', 'unknown')}")
 
-                # Retrieve and log model name
-                model_name = self.get_model_name(soco_device)
-                self.logger.warning(f"🧪 Retrieved model_name for {indigo_device.name}: {model_name}")
+            # 🆔 Update ZP_LocalUID from SoCo
+            try:
+                zp_uid = soco_device.uid
+                indigo_device.updateStateOnServer("ZP_LocalUID", value=zp_uid)
+                self.logger.info(f"🆔 Set ZP_LocalUID for {indigo_device.name}: {zp_uid}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to set ZP_LocalUID for {indigo_device.name}: {e}")
 
-                # Start SoCo Event Listener once
-                if not getattr(self, "event_listener_started", False):
-                    try:
-                        from soco.events import event_listener
-                        self.logger.info("🚀 Starting SoCo Event Listener...")
-                        soco.config.EVENT_LISTENER_IP = self.find_sonos_interface_ip()
-                        event_listener.start(any_zone=soco_device)
-                        self.event_listener_started = True
-                        self.logger.info(f"✅ SoCo Event Listener running: {event_listener.is_running}")
-                    except Exception as e:
-                        self.logger.error(f"❌ Failed to start SoCo Event Listener: {e}")
+            # 🧪 Log model name
+            model_name = self.get_model_name(soco_device)
+            self.logger.warning(f"🧪 Retrieved model_name for {indigo_device.name}: {model_name}")
+            indigo_device.updateStateOnServer("ModelName", model_name)
 
+            # 🚀 Start event listener if needed
+            if not getattr(self, "event_listener_started", False):
                 try:
-                    # Confirm UPnP control points exist
-                    av = soco_device.avTransport
-                    rc = soco_device.renderingControl
-                    self.safe_debug(f"🧪 About to call socoSubscribe() for {indigo_device.name}")
-                    self.socoSubscribe(indigo_device, soco_device)
-                    self.safe_debug(f"🧪 Returned from socoSubscribe() for {indigo_device.name}")
-
-                    # ✅ AFTER successful subscription, update zone group states
-                    self.updateZoneGroupStates(indigo_device)
-
+                    from soco.events import event_listener
+                    self.logger.info("🚀 Starting SoCo Event Listener...")
+                    soco.config.EVENT_LISTENER_IP = self.find_sonos_interface_ip()
+                    event_listener.start(any_zone=soco_device)
+                    self.event_listener_started = True
+                    self.logger.info(f"✅ SoCo Event Listener running: {event_listener.is_running}")
                 except Exception as e:
-                    self.logger.error(f"❌ socoSubscribe() or updateZoneGroupStates() failed for {indigo_device.name}: {e}")
+                    self.logger.error(f"❌ Failed to start SoCo Event Listener: {e}")
 
-            else:
-                self.logger.warning(f"🧪 soco_device is None — skipping subscription for {indigo_device.name}")
+            # 🔔 Subscribe and update group state
+            try:
+                self.socoSubscribe(indigo_device, soco_device)
+                self.updateZoneGroupStates(indigo_device)
+            except Exception as e:
+                self.logger.error(f"❌ socoSubscribe() or updateZoneGroupStates() failed for {indigo_device.name}: {e}")
+
+
+            # 🔄 Initiakize zone grouped states (globally)
+            # 🔄 Initialize zone grouped states
+            #self.initZones(indigo_device)
+            self.initZones(indigo_device, soco_device)
+            # 🔄 Evaluate grouped states (globally)
+            self.evaluate_and_update_grouped_states()
 
         except Exception as e:
             self.logger.error(f"❌ Error in deviceStartComm for {indigo_device.name}: {e}")
-
 
 
 
@@ -2925,21 +3456,96 @@ class SonosPlugin(object):
 
 
     #######################################################################################################################################
-    ### Event Handler to process lightweight soco state changes (sound related kiond of things) and retreive current dynamic state updates
+    ### Event Handler to process lightweight soco state changes (sound related kind of things) and retrieve current dynamic state updates
     #######################################################################################################################################
 
+
     def soco_event_handler(self, event_obj):
+        import copy
+
         try:
+            #self.logger.warning("📥 Raw Event Object Received:")
+            #self.logger.warning(f"   ⤷ service: {getattr(event_obj.service, 'service_type', '?')}")
+            #self.logger.warning(f"   ⤷ sid: {getattr(event_obj, 'sid', '?')}")
+            soco_ip = getattr(getattr(event_obj, "soco", None), "ip_address", "(no soco)")
+            #self.logger.warning(f"   ⤷ soco.ip: {soco_ip}")
+            #self.logger.warning(f"   ⤷ variables: {event_obj.variables}")
+        except Exception as log_err:
+            self.logger.error(f"❌ Failed to log raw event object: {log_err}")
+
+        service_type = getattr(event_obj.service, "service_type", "").lower()
+        sid = getattr(event_obj, "sid", "").lower()
+        zone_ip = getattr(getattr(event_obj, "soco", None), "ip_address", None)
+
+        is_zgt_event = (
+            "zonegrouptopology" in service_type or
+            "zonegrouptopology" in sid or
+            "zone_group_state" in event_obj.variables or
+            "ZoneGroupState" in event_obj.variables
+        )
+
+        if is_zgt_event:
+            self.logger.warning(f"🔎 ZoneGroupTopology event triggered by {zone_ip}")
+            zone_state_xml = (
+                event_obj.variables.get("zone_group_state") or
+                event_obj.variables.get("ZoneGroupState") or
+                ""
+            )
+
+            if not zone_state_xml:
+                self.logger.warning(f"⚠️ ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
+            else:
+                # Ensure XML is string, not bytes
+                if isinstance(zone_state_xml, bytes):
+                    try:
+                        zone_state_xml = zone_state_xml.decode("utf-8", errors="replace")
+                        self.logger.debug("🔧 zone_state_xml was bytes, decoded to UTF-8.")
+                    except Exception as decode_err:
+                        self.logger.error(f"❌ Failed to decode zone_group_state XML bytes: {decode_err}")
+                        return
+
+                try:
+                    parsed_groups = self.parse_zone_group_state(zone_state_xml)
+                    if not parsed_groups:
+                        self.logger.warning("⚠️ Parsed zone group data was empty.")
+                    else:
+                        self.logger.warning(f"🧪 Parsed {len(parsed_groups)} group(s) from XML. Caching now...")
+                        with self.zone_group_state_lock:
+                            self.zone_group_state_cache = copy.deepcopy(parsed_groups)
+                            self.logger.warning(f"💾 zone_group_state_cache updated with {len(self.zone_group_state_cache)} group(s)")
+
+                        self.logger.warning("📊 Parsed Zone Group Summary:")
+                        for group_id, data in parsed_groups.items():
+                            for m in data["members"]:
+                                bonded_flag = " (Bonded)" if m["bonded"] else ""
+                                coord_flag = " (Coordinator)" if m["coordinator"] else ""
+                                self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
+
+                        self.logger.warning("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
+                        self.evaluate_and_update_grouped_states()
+
+                        self.logger.warning("📣 Propagating updated Grouped states to all devices...")
+                        for dev in indigo.devices.iter("self"):
+                            self.updateZoneGroupStates(dev)
+
+                except Exception as e:
+                    self.logger.error(f"❌ Failed to parse ZoneGroupState XML: {e}")
+
+        try:
+            service_type = getattr(event_obj.service, "service_type", "UNKNOWN")
+            sid = getattr(event_obj, "sid", "N/A")
             zone_ip = getattr(event_obj, "zone_ip", None)
+
+            self.logger.warning(f"📥 RAW EVENT RECEIVED — service: {service_type} | sid: {sid}")
+
             if not zone_ip and hasattr(event_obj, "soco"):
                 zone_ip = getattr(event_obj.soco, "ip_address", None)
 
-            # Initialize indigo_device and dev_id early
             indigo_device = None
             dev_id = None
 
             for dev_lookup_id, subs in self.soco_subs.items():
-                if any(sub.sid == getattr(event_obj, "sid", None) for sub in subs.values()):
+                if any(sub.sid == sid for sub in subs.values()):
                     indigo_device = indigo.devices[int(dev_lookup_id)]
                     dev_id = indigo_device.id
                     if not zone_ip:
@@ -2947,13 +3553,19 @@ class SonosPlugin(object):
                     break
 
             if not indigo_device:
-                self.logger.warning(f"⚠️ Could not find device for SID {getattr(event_obj, 'sid', 'N/A')}")
+                self.logger.warning(f"⚠️ Event received with unknown SID {sid}. Cannot map to Indigo device.")
+                return
+
+            #self.logger.debug(f"📡 Event received from {zone_ip} — SID={sid} | Service={service_type}")
+            #self.logger.debug(f"📦 Event variables: {getattr(event_obj, 'variables', {})}")
+
+            if "GroupStateChanged" in getattr(event_obj, "variables", {}):
+                self.logger.info("🔄 GroupStateChanged variable present — triggering group state refresh...")
                 return
 
             if not zone_ip:
                 zone_ip = "unknown"
 
-            # ✅ MAKE SURE THIS IS DEFINED EARLY
             state_updates = {}
 
             self.safe_debug(f"🧪 Event handler fired! SID={getattr(event_obj, 'sid', 'N/A')} zone_ip={zone_ip} Type={type(event_obj)}")
@@ -2962,27 +3574,22 @@ class SonosPlugin(object):
             if "transport_state" in event_obj.variables:
                 transport_state = event_obj.variables["transport_state"]
                 transport_state_upper = transport_state.upper()
-                state_updates["ZP_STATE"] = transport_state_upper  # Ensure we track this
+                state_updates["ZP_STATE"] = transport_state_upper
                 indigo_device.updateStateOnServer(key="State", value=transport_state_upper)
                 indigo_device.updateStateOnServer(key="ZP_STATE", value=transport_state_upper)
                 self.logger.debug(f"🔄 Updated State and ZP_STATE from event: {transport_state_upper}")
 
-
-
-            # Ensure last_siriusxm_* maps exist
             if not hasattr(self, "last_siriusxm_track_by_dev"):
                 self.last_siriusxm_track_by_dev = {}
             if not hasattr(self, "last_siriusxm_artist_by_dev"):
                 self.last_siriusxm_artist_by_dev = {}
 
-            # Define safe_call helper
             def safe_call(val):
                 try:
                     return val() if callable(val) else val
                 except Exception:
                     return ""
 
-            # ✅ Always define these early
             current_uri = (
                 event_obj.variables.get("current_track_uri") or
                 event_obj.variables.get("enqueued_transport_uri") or
@@ -2994,8 +3601,6 @@ class SonosPlugin(object):
                 ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
                 ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
             ]
-
-
 
             if "volume" in event_obj.variables:
                 vol = event_obj.variables["volume"]
@@ -3026,273 +3631,232 @@ class SonosPlugin(object):
                     self.safe_debug(f"🔄 Lightweight update → {k}: {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
-            # After handling AVTransport, RenderingControl events
             soco_device = self.getSoCoDeviceByIP(indigo_device.address)
             if soco_device:
                 self.refresh_group_membership(indigo_device, soco_device)
-
-                # ✅ Unconditionally refresh master & propagate to slaves
                 self.logger.debug(f"🔁 Forcing master state save and slave updates for {indigo_device.name}")
-
-                # Save current master device states explicitly (this can be no-op if up-to-date)
-                # You might not need extra code if refresh_group_membership already did this.
-
-                # Update all slave devices from master state
-                self.updateStateOnSlaves(indigo_device)
+                self.evaluate_and_update_grouped_states()                
+                #self.updateStateOnSlaves(indigo_device)
             else:
                 self.logger.warning(f"⚠️ Could not refresh group membership: No SoCo device for {indigo_device.name}")
 
-                
+
+            if service_type.lower() == "avtransport":
+                if indigo_device:
+                    try:
+                        self.safe_debug(f"🎨 Attempting artwork update for {indigo_device.name} (IP: {indigo_device.address})")
+                        self.update_album_artwork(event_obj=event_obj, dev=indigo_device, zone_ip=indigo_device.address.strip())
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Failed to update album artwork: {e}")
+                else:
+                    self.logger.warning("⚠️ Skipping artwork update — indigo_device could not be resolved for AVTransport event")
+            else:
+                self.safe_debug(f"🎨 Skipping artwork update — event service_type={service_type} (only AVTransport allowed)")
+
+    #   def handle_heavyweight_updates(self, event_obj, indigo_device, dev_id, zone_ip, state_updates):
+    #        state_updates = {}
+
+            def safe_call(val):
+                try:
+                    return val() if callable(val) else val
+                except Exception:
+                    return ""
+
+            # ✅ NEW: Check if this event carries meaningful metadata
+            has_metadata_update = (
+                "current_track_meta_data" in event_obj.variables or
+                "enqueued_transport_uri_meta_data" in event_obj.variables or
+                "av_transport_uri_meta_data" in event_obj.variables
+            )
+
+            if not has_metadata_update:
+                self.safe_debug("⚡ Skipping heavyweight updates: no metadata present in this event")
+                #return  # Exit early if no media/metadata updates
+
+            uri_priority = [
+                ("enqueued_transport_uri", event_obj.variables.get("enqueued_transport_uri", "")),
+                ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
+                ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
+            ]
+
+            # Initialize helpers and flags early
+            is_siriusxm = False
+            is_pandora = False
+            is_apple_music = False
+            is_sonos_radio = False
+            is_sonos = False
+            detected_source = "Sonos"  # default fallback
+
+            for name, uri in uri_priority:
+                if "x-sonosapi-hls:channel-linear" in uri:
+                    detected_source = "SiriusXM"
+                    is_siriusxm = True
+                    break
+                elif "x-sonosapi-radio" in uri or "VC1%3a%3aST%3a%3aST%3a" in uri:
+                    detected_source = "Pandora"
+                    is_pandora = True
+                    break
+                elif "x-apple-music" in uri:
+                    detected_source = "Apple Music"
+                    is_apple_music = True
+                    break
+                elif "x-sonosapi-stream" in uri:
+                    detected_source = "Sonos Radio"
+                    is_sonos_radio = True
+                    break
+                elif "x-sonos-http:librarytrack" in uri:
+                    detected_source = "Sonos"
+                    is_apple_music = True
+                    break
+
+            if detected_source == "Sonos":
+                is_sonos = True
+
+            self.safe_debug(f"✅ Detected source: {detected_source}")
+            state_updates["ZP_SOURCE"] = detected_source
+
+            # === SiriusXM handling ===
+            if is_siriusxm:
+                meta = event_obj.variables.get("enqueued_transport_uri_meta_data") or event_obj.variables.get("av_transport_uri_meta_data")
+                if meta:
+                    try:
+                        title_raw = safe_call(getattr(meta, "title", ""))
+                        self.safe_debug(f"🔍 Raw SiriusXM title string: '{title_raw}'")
+
+                        ch_part, name_part = "", ""
+                        if " - " in title_raw:
+                            ch_part, name_part = title_raw.split(" - ", 1)
+                            ch_part = ch_part.strip()
+                            name_part = name_part.strip()
+                        else:
+                            ch_part = title_raw.strip()
+                            name_part = ""
+
+                        state_updates["ZP_TRACK"] = ch_part or "Unknown Channel"
+                        state_updates["ZP_STATION"] = ch_part or "Unknown Station"
+                        state_updates["ZP_ARTIST"] = name_part or "Unknown Artist"
+                        state_updates["ZP_ALBUM"] = ""
+
+                        self.safe_debug(f"🎶 SiriusXM parsed → TRACK: '{state_updates['ZP_TRACK']}', ARTIST: '{state_updates['ZP_ARTIST']}', STATION: '{state_updates['ZP_STATION']}'")
+
+                        self.last_siriusxm_track_by_dev[dev_id] = state_updates["ZP_TRACK"]
+                        self.last_siriusxm_artist_by_dev[dev_id] = state_updates["ZP_ARTIST"]
+
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Failed to parse SiriusXM metadata: {e}")
+                        fallback_track = self.last_siriusxm_track_by_dev.get(dev_id, "Unknown Channel")
+                        fallback_artist = self.last_siriusxm_artist_by_dev.get(dev_id, "Unknown Artist")
+                        state_updates["ZP_TRACK"] = fallback_track
+                        state_updates["ZP_STATION"] = fallback_track
+                        state_updates["ZP_ARTIST"] = fallback_artist
+                        state_updates["ZP_ALBUM"] = ""
+
+            # === Pandora handling ===
+            if is_pandora and "enqueued_transport_uri_meta_data" in event_obj.variables:
+                meta = event_obj.variables["enqueued_transport_uri_meta_data"]
+                try:
+                    station_title = safe_call(getattr(meta, "title", ""))
+                    if station_title.endswith(" (My Station)"):
+                        station_title = station_title.replace(" (My Station)", "").strip()
+                    if station_title:
+                        state_updates["ZP_STATION"] = station_title
+                        self.safe_debug(f"📻 Extracted Pandora station name: {station_title}")
+
+                    station_creator = safe_call(getattr(meta, "creator", ""))
+                    if station_creator:
+                        state_updates["ZP_CREATOR"] = station_creator
+                        if "ZP_ARTIST" not in state_updates or not state_updates["ZP_ARTIST"]:
+                            state_updates["ZP_ARTIST"] = station_creator
+                        self.safe_debug(f"🎨 Extracted Pandora creator: {station_creator}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to parse Pandora metadata: {e}")
+
+            # === General metadata ===
+            if "current_track_meta_data" in event_obj.variables:
+                meta = event_obj.variables["current_track_meta_data"]
+                try:
+                    meta_dict = meta.to_dict()
+                    track_title = meta_dict.get("title", "")
+                    track_album = meta_dict.get("album", "")
+                    track_artist = meta_dict.get("artist", "")
+                    track_creator = meta_dict.get("creator", "")
+
+                    if track_title:
+                        state_updates["ZP_TRACK"] = track_title
+                    if track_album:
+                        state_updates["ZP_ALBUM"] = track_album
+                    if track_artist:
+                        state_updates["ZP_ARTIST"] = track_artist
+                    elif track_creator:
+                        state_updates["ZP_ARTIST"] = track_creator
+                    if track_creator:
+                        state_updates["ZP_CREATOR"] = track_creator
+
+                    # ✅ NEW: Capture and store all relevant URIs
+                    current_uri = event_obj.variables.get("current_track_uri", "")
+                    av_transport_uri = event_obj.variables.get("av_transport_uri", "")
+                    enqueued_uri = event_obj.variables.get("enqueued_transport_uri", "")
+
+                    state_updates["ZP_CurrentTrackURI"] = current_uri
+                    state_updates["ZP_AVTransportURI"] = av_transport_uri
+                    state_updates["ZP_EnqueuedURI"] = enqueued_uri
+
+                    self.safe_debug(f"📡 Captured URIs — current: {current_uri}, av: {av_transport_uri}, enqueued: {enqueued_uri}")
+
+                    self.safe_debug(f"🎵 General metadata parsed: title={track_title}, artist={track_artist}, creator={track_creator}, album={track_album}")
+
+                except Exception as e:
+                    self.logger.debug(f"⚠️ Failed to extract general metadata: {e}")
+
+            # === Apply all collected state updates ===
+            if state_updates:
+                for k, v in state_updates.items():
+                    self.safe_debug(f"🔄 Heavyweight update → {k}: {v}")
+                    indigo_device.updateStateOnServer(key=k, value=v)
+
+            # === Artwork block — moved here for coordination after states ===
+            try:
+                indigo_device = self.getIndigoDeviceFromEvent(event_obj)
+                if indigo_device:
+                    self.update_album_artwork(
+                        event_obj=event_obj,
+                        dev=indigo_device,
+                        zone_ip=indigo_device.address.strip()
+                    )
+                else:
+                    self.logger.warning("⚠️ Skipping artwork update — Indigo device could not be resolved from event")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to update album artwork: {e}")
 
 
 
-             # After lightweight handling invoke heavyweight to check for events           
-            self.handle_heavyweight_updates(event_obj, indigo_device, dev_id, zone_ip, state_updates)
+            # === Coordinator logic ===
+            is_master = False
+            if indigo_device:
+                try:
+                    coordinator = self.getCoordinatorDevice(indigo_device)
+                    is_master = (coordinator.address == indigo_device.address)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not determine coordinator for {indigo_device.name}: {e}")
+            else:
+                self.logger.warning("⚠️ Skipping coordinator check — indigo_device is None")
 
 
 
+            if is_master:
+                self.updateStateOnSlaves(indigo_device)
+                #self.evaluate_and_update_grouped_states()            
 
         except Exception as e:
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
 
 
 
-    #################################################################################################
-    ### End - Event Handler to process soco state changes and retreive current dynamic state updates
-    #################################################################################################
-
-
-
-
-    ############################################################################################################
-    ### New - Heavyweight for transport related kind of events (channel changes, source change, album art, etc.)
-    ############################################################################################################
-
-    def handle_heavyweight_updates(self, event_obj, indigo_device, dev_id, zone_ip, state_updates):
-
-        state_updates = {}
-
-        def safe_call(val):
-            try:
-                return val() if callable(val) else val
-            except Exception:
-                return ""
-
-        # ✅ NEW: Check if this event carries meaningful metadata
-        has_metadata_update = (
-            "current_track_meta_data" in event_obj.variables or
-            "enqueued_transport_uri_meta_data" in event_obj.variables or
-            "av_transport_uri_meta_data" in event_obj.variables
-        )
-
-        if not has_metadata_update:
-            self.safe_debug("⚡ Skipping heavyweight updates: no metadata present in this event")
-            return  # Exit early if no media/metadata updates
-
-
-        uri_priority = [
-            ("enqueued_transport_uri", event_obj.variables.get("enqueued_transport_uri", "")),
-            ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
-            ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
-        ]
-
-        # Initialize helpers and flags early
-        is_siriusxm = False
-        is_pandora = False
-        is_apple_music = False
-        is_sonos_radio = False
-        is_sonos = False
-        detected_source = "Sonos"  # default fallback
-
-        for name, uri in uri_priority:
-            if "x-sonosapi-hls:channel-linear" in uri:
-                detected_source = "SiriusXM"
-                is_siriusxm = True
-                break
-            elif "x-sonosapi-radio" in uri or "VC1%3a%3aST%3a%3aST%3a" in uri:
-                detected_source = "Pandora"
-                is_pandora = True
-                break
-            elif "x-apple-music" in uri:
-                detected_source = "Apple Music"
-                is_apple_music = True
-                break
-            elif "x-sonosapi-stream" in uri:
-                detected_source = "Sonos Radio"
-                is_sonos_radio = True
-                break
-            elif "x-sonos-http:librarytrack" in uri:
-                detected_source = "Sonos"
-                is_apple_music = True
-                break
-
-        if detected_source == "Sonos":
-            is_sonos = True
-
-        self.safe_debug(f"✅ Detected source: {detected_source}")
-        state_updates["ZP_SOURCE"] = detected_source
-
-        # === SiriusXM handling ===
-        if is_siriusxm:
-            meta = event_obj.variables.get("enqueued_transport_uri_meta_data") or event_obj.variables.get("av_transport_uri_meta_data")
-            if meta:
-                try:
-                    title_raw = safe_call(getattr(meta, "title", ""))
-                    self.safe_debug(f"🔍 Raw SiriusXM title string: '{title_raw}'")
-
-                    ch_part, name_part = "", ""
-                    if " - " in title_raw:
-                        ch_part, name_part = title_raw.split(" - ", 1)
-                        ch_part = ch_part.strip()
-                        name_part = name_part.strip()
-                    else:
-                        ch_part = title_raw.strip()
-                        name_part = ""
-
-                    state_updates["ZP_TRACK"] = ch_part or "Unknown Channel"
-                    state_updates["ZP_STATION"] = ch_part or "Unknown Station"
-                    state_updates["ZP_ARTIST"] = name_part or "Unknown Artist"
-                    state_updates["ZP_ALBUM"] = ""
-
-                    self.safe_debug(f"🎶 SiriusXM parsed → TRACK: '{state_updates['ZP_TRACK']}', ARTIST: '{state_updates['ZP_ARTIST']}', STATION: '{state_updates['ZP_STATION']}'")
-
-                    self.last_siriusxm_track_by_dev[dev_id] = state_updates["ZP_TRACK"]
-                    self.last_siriusxm_artist_by_dev[dev_id] = state_updates["ZP_ARTIST"]
-
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Failed to parse SiriusXM metadata: {e}")
-                    fallback_track = self.last_siriusxm_track_by_dev.get(dev_id, "Unknown Channel")
-                    fallback_artist = self.last_siriusxm_artist_by_dev.get(dev_id, "Unknown Artist")
-                    state_updates["ZP_TRACK"] = fallback_track
-                    state_updates["ZP_STATION"] = fallback_track
-                    state_updates["ZP_ARTIST"] = fallback_artist
-                    state_updates["ZP_ALBUM"] = ""
-
-        # === Pandora handling ===
-        if is_pandora and "enqueued_transport_uri_meta_data" in event_obj.variables:
-            meta = event_obj.variables["enqueued_transport_uri_meta_data"]
-            try:
-                station_title = safe_call(getattr(meta, "title", ""))
-                if station_title.endswith(" (My Station)"):
-                    station_title = station_title.replace(" (My Station)", "").strip()
-                if station_title:
-                    state_updates["ZP_STATION"] = station_title
-                    self.safe_debug(f"📻 Extracted Pandora station name: {station_title}")
-
-                station_creator = safe_call(getattr(meta, "creator", ""))
-                if station_creator:
-                    state_updates["ZP_CREATOR"] = station_creator
-                    if "ZP_ARTIST" not in state_updates or not state_updates["ZP_ARTIST"]:
-                        state_updates["ZP_ARTIST"] = station_creator
-                    self.safe_debug(f"🎨 Extracted Pandora creator: {station_creator}")
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to parse Pandora metadata: {e}")
-
-        # === General metadata ===
-        if "current_track_meta_data" in event_obj.variables:
-            meta = event_obj.variables["current_track_meta_data"]
-            try:
-                meta_dict = meta.to_dict()
-                track_title = meta_dict.get("title", "")
-                track_album = meta_dict.get("album", "")
-                track_artist = meta_dict.get("artist", "")
-                track_creator = meta_dict.get("creator", "")
-
-                if track_title:
-                    state_updates["ZP_TRACK"] = track_title
-                if track_album:
-                    state_updates["ZP_ALBUM"] = track_album
-                if track_artist:
-                    state_updates["ZP_ARTIST"] = track_artist
-                elif track_creator:
-                    state_updates["ZP_ARTIST"] = track_creator
-                if track_creator:
-                    state_updates["ZP_CREATOR"] = track_creator
-
-                # ✅ NEW: Capture and store all relevant URIs
-                current_uri = event_obj.variables.get("current_track_uri", "")
-                av_transport_uri = event_obj.variables.get("av_transport_uri", "")
-                enqueued_uri = event_obj.variables.get("enqueued_transport_uri", "")
-
-                state_updates["ZP_CurrentTrackURI"] = current_uri
-                state_updates["ZP_AVTransportURI"] = av_transport_uri
-                state_updates["ZP_EnqueuedURI"] = enqueued_uri
-
-                self.safe_debug(f"📡 Captured URIs — current: {current_uri}, av: {av_transport_uri}, enqueued: {enqueued_uri}")
-
-                self.safe_debug(f"🎵 General metadata parsed: title={track_title}, artist={track_artist}, creator={track_creator}, album={track_album}")
-
-            except Exception as e:
-                self.logger.debug(f"⚠️ Failed to extract general metadata: {e}")
-
-
-
-        # === Album art ===
-        try:
-            coordinator = self.getCoordinatorDevice(indigo_device)
-            is_master = (coordinator.address == indigo_device.address)
-            artwork_path = f"/Library/Application Support/Perceptive Automation/images/Sonos/sonos_art_{zone_ip}.jpg"
-            default_path = "/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork.jpg"
-
-            if is_master:
-                meta = event_obj.variables.get("current_track_meta_data", None)
-                if meta:
-                    album_art_uri = safe_call(getattr(meta, "album_art_uri", ""))
-                    if album_art_uri.startswith("/"):
-                        album_art_uri = f"http://{zone_ip}:1400{album_art_uri}"
-
-                    if album_art_uri:
-                        self.logger.debug(f"🎨 Attempting to fetch album art: {album_art_uri}")
-                        try:
-                            response = requests.get(album_art_uri, timeout=5)
-                            if response.status_code == 200:
-                                img_data = response.content
-                                self.logger.debug(f"✅ Album art fetched ({len(img_data)} bytes)")
-                                image = Image.open(io.BytesIO(img_data))
-                                image.thumbnail((500, 500))
-                                image = image.convert("RGB")
-                                image.save(artwork_path, format="JPEG", quality=75)
-                                self.logger.debug(f"🎨 Resized and saved album art at {artwork_path}")
-                            else:
-                                raise Exception(f"HTTP {response.status_code}")
-                        except Exception as e:
-                            self.logger.debug(f"⚠️ No album art initially identified - lets try again: {e}; - using default")
-                            if os.path.exists(default_path):
-                                shutil.copyfile(default_path, artwork_path)
-                    else:
-                        self.logger.warning("⚠️ No album_art_uri provided; using default")
-                        if os.path.exists(default_path):
-                            shutil.copyfile(default_path, artwork_path)
-                else:
-                    #self.logger.warning("⚠️ No current_track_meta_data; using default art")
-                    if os.path.exists(default_path):
-                        shutil.copyfile(default_path, artwork_path)
-
-                album_art_uri = f"http://localhost:8888/sonos_art_{zone_ip}.jpg"
-            else:
-                master_zone_ip = coordinator.address
-                album_art_uri = f"http://localhost:8888/sonos_art_{master_zone_ip}.jpg"
-
-            state_updates["ZP_ART"] = album_art_uri
-
-        except Exception as e:
-            self.logger.error(f"❌ Error in album art block: {e}")
-
-        # === Apply heavy updates ===
-        if state_updates:
-            for k, v in state_updates.items():
-                self.safe_debug(f"🔄 Heavyweight update → {k}: {v}")
-                indigo_device.updateStateOnServer(key=k, value=v)
-
-            if is_master:
-                self.updateStateOnSlaves(indigo_device)
 
 
     #################################################################################################
     ### End of New - Heavyweight
     #################################################################################################
-
-
 
 
     def getSoCoDeviceByIP(self, ip_address):
@@ -3306,13 +3870,14 @@ class SonosPlugin(object):
                 self.safe_debug(f"✅ Found {ip_address} in soco_device_cache")
                 return self.soco_device_cache[ip_address]
 
-            # If not cached, try to discover and populate
-            from soco import discover
+            # Try to discover devices
+            from soco import discover, SoCo
             devices = discover()
             if devices:
                 self.safe_debug(f"🔍 Discovered devices: {[dev.ip_address for dev in devices]}")
                 for dev in devices:
                     self.soco_device_cache[dev.ip_address] = dev
+
                 if ip_address in self.soco_device_cache:
                     self.safe_debug(f"✅ Found {ip_address} after discovery")
                     return self.soco_device_cache[ip_address]
@@ -3321,63 +3886,76 @@ class SonosPlugin(object):
             else:
                 self.logger.warning("⚠️ No SoCo devices discovered")
 
-            return None
+            # 🔁 NEW: fallback to direct SoCo init
+            self.logger.warning(f"⚠️ getSoCoDeviceByIP({ip_address}) returned None — attempting fallback init...")
+            try:
+                fallback_device = SoCo(ip_address)
+                self.soco_device_cache[ip_address] = fallback_device
+                self.logger.warning(f"✅ Fallback SoCo added to soco_device_cache[{ip_address}]")
+                return fallback_device
+            except Exception as fallback_error:
+                self.logger.error(f"❌ Fallback SoCo init failed in getSoCoDeviceByIP: {fallback_error}")
+                return None
 
         except Exception as e:
             self.logger.error(f"❌ Error in getSoCoDeviceByIP: {e}")
             return None
 
 
-
+        
     def getCoordinatorDevice(self, device):
         """
         Given an Indigo device, return the Indigo device object representing
         the group coordinator (master) for that device's group.
-        If the device is the master, it returns itself.
+        If the device is the master or resolution fails, returns itself.
         """
         try:
+            if not device:
+                self.logger.error("❌ getCoordinatorDevice: device argument is None")
+                return None
+
             zone_ip = device.address
+            if not zone_ip:
+                self.logger.error(f"❌ getCoordinatorDevice: device {device.name} has no IP address set")
+                return device
+
             self.logger.debug(f"🔍 Looking up SoCo device for IP: {zone_ip}")
             soco_device = self.getSoCoDeviceByIP(zone_ip)
 
             if not soco_device:
-                self.logger.warning(f"⚠️ getSoCoDeviceByIP({zone_ip}) returned None — "
-                                    f"falling back to treating {device.name} as its own coordinator.")
+                self.logger.warning(f"⚠️ getSoCoDeviceByIP({zone_ip}) returned None — treating {device.name} as its own coordinator.")
                 if hasattr(self, "soco_device_cache"):
-                    self.logger.debug(f"📋 Available SoCo devices in cache: {list(self.soco_device_cache.keys())}")
+                    self.logger.debug(f"📋 Cached SoCo devices: {list(self.soco_device_cache.keys())}")
                 else:
-                    self.logger.debug("📋 No soco_device_cache attribute found on SonosPlugin — skipping cache dump.")
-                return device  # fallback: treat self as coordinator
+                    self.logger.debug("📋 No soco_device_cache attribute present.")
+                return device  # fallback
 
-            # Ensure group/coordinator attributes are accessible
-            if not hasattr(soco_device, "group") or not hasattr(soco_device.group, "coordinator"):
-                self.logger.warning(f"⚠️ SoCo device {zone_ip} has no group/coordinator info — "
-                                    f"falling back to self.")
+            # Confirm group/coordinator exists
+            group = getattr(soco_device, "group", None)
+            if not group or not hasattr(group, "coordinator"):
+                self.logger.warning(f"⚠️ SoCo device {zone_ip} has no group or coordinator info — using self.")
                 return device
 
-            coordinator = soco_device.group.coordinator
-            coordinator_ip = coordinator.ip_address
+            coordinator = group.coordinator
+            coordinator_ip = getattr(coordinator, "ip_address", None)
+            if not coordinator_ip:
+                self.logger.warning(f"⚠️ Coordinator IP is missing — falling back to self.")
+                return device
+
             self.logger.debug(f"✅ Group coordinator IP for {device.name}: {coordinator_ip}")
 
-            # Find Indigo device matching the coordinator IP
-            matching_dev = None
+            # Match to Indigo device
             for dev in indigo.devices.iter("self"):
                 if dev.address == coordinator_ip:
-                    matching_dev = dev
-                    break
+                    self.logger.debug(f"✅ Found Indigo device for coordinator: {dev.name} ({coordinator_ip})")
+                    return dev
 
-            if matching_dev:
-                self.logger.debug(f"✅ Found Indigo device for coordinator: {matching_dev.name} ({coordinator_ip})")
-                return matching_dev
-            else:
-                self.logger.warning(f"⚠️ No Indigo device found matching coordinator IP {coordinator_ip}, "
-                                    f"falling back to self.")
-                self.logger.debug(f"📋 Checked Indigo devices: {[d.address for d in indigo.devices.iter('self')]}")
-                return device
+            self.logger.warning(f"⚠️ No Indigo device matches coordinator IP {coordinator_ip}; defaulting to self.")
+            return device
 
         except Exception as e:
-            self.logger.error(f"❌ Error in getCoordinatorDevice: {e}")
-            return device  # fallback: treat self as coordinator
+            self.logger.error(f"❌ Exception in getCoordinatorDevice: {e}")
+            return device
 
 
 
@@ -3404,6 +3982,7 @@ class SonosPlugin(object):
                 "ZP_RELATIVE": "",
                 "ZP_ALBUM": "",
                 "ZP_ARTIST": "",
+                "ZP_SOURCE": "",                
                 "ZP_CREATOR": "",
                 "ZP_AIName": "",
                 "ZP_AIPath": "",
@@ -3425,7 +4004,6 @@ class SonosPlugin(object):
                 "GROUP_Name": "",
                 "ZP_CurrentTrack": "",
                 "ZP_CurrentTrackURI": "",
-                "ZP_SOURCE": "Unknown",
                 "ZoneGroupID": "",
                 "ZoneGroupName": "",
                 "ZonePlayerUUIDsInGroup": "",
@@ -3445,51 +4023,56 @@ class SonosPlugin(object):
 
 
 
-
-
     def soco_discover_and_subscribe(self):
         try:
             self.logger.info("🔍 Discovering Sonos devices on the network...")
 
-            devices = soco.discover()
-            for device in devices:
-                if device.ip_address == indigo_device.address:
-                    soco_device = device
-
-            #devices = soco.discover()
+            devices = soco.discover(timeout=5)  # Add a timeout to avoid blocking forever
             if not devices:
                 self.logger.warning("❌ No Sonos devices discovered.")
                 return
 
             self.logger.info(f"✅ Found {len(devices)} Sonos device(s). Subscribing to events...")
 
+            # Clear and rebuild the device cache
+            self.soco_by_ip = {}
+
             for device in devices:
-                try:
-                    self.logger.info(f"   📻 Discovered {device.player_name} @ {device.ip_address}")
+                ip = device.ip_address
+                name = device.player_name
+                self.logger.info(f"   📻 Discovered {name} @ {ip}")
 
-                    # 🔍 Match SoCo device to Indigo device by IP
-                    matched_device = None
-                    for dev in indigo.devices.iter("self"):
-                        if dev.address == device.ip_address:
-                            matched_device = dev
-                            break
+                # Cache the SoCo device by IP for later lookup
+                self.soco_by_ip[ip] = device
 
-                    if matched_device:
-                        self.safe_debug(f"   🔗 Matched to Indigo device {matched_device.name} (ID: {matched_device.id})")
-                        self.socoSubscribe(matched_device, device)
-                    else:
-                        self.logger.warning(f"⚠️ No Indigo device found matching IP {device.ip_address}")
+                # Try to match to an Indigo device by IP
+                matched_device = None
+                for dev in indigo.devices.iter("self"):
+                    if dev.address == ip:
+                        matched_device = dev
+                        break
 
-                except Exception as e:
-                    self.logger.exception(f"❌ Error subscribing to {getattr(device, 'ip_address', 'unknown')}: {e}")
+                if matched_device:
+                    self.safe_debug(f"   🔗 Matched to Indigo device {matched_device.name} (ID: {matched_device.id})")
+                    self.socoSubscribe(matched_device, device)
+                else:
+                    self.logger.warning(f"⚠️ No Indigo device found matching IP {ip}")
 
         except Exception as e:
             self.logger.exception("❌ Error during Sonos device discovery and subscription")
 
-
+            
 
     ######################################################################################
     # Utiliies
+
+
+
+    def build_ip_to_device_map(self):
+        self.ip_to_indigo_device = {
+            dev.address.strip(): dev
+            for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos")
+        }
 
 
 
@@ -3541,41 +4124,11 @@ class SonosPlugin(object):
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
-    def updateStateOnServer(self, dev, state, value):
-        try:
-            if self.plugin.stateUpdatesDebug:
-                self.safe_debug(f"\t Updating Device: {dev.name}, State: {state}, Value: {value}")
-            GROUP_Coordinator = dev.states['GROUP_Coordinator']
-            if GROUP_Coordinator == "false" and state in ZoneGroupStates:
-                pass
-            else:
-                if value is None or value == "None":
-                    dev.updateStateOnServer(state, "")
-                else:
-                    # self.logger.warning(f"State: '{state}', Value [Type = {type(value)}]: '{value}'")
-                    dev.updateStateOnServer(state, value.encode('utf-8'))
-                    # dev.updateStateOnServer(state, value)
 
 
-            # Replicate states to slave ZonePlayers
-            if state in ZoneGroupStates and dev.states['GROUP_Coordinator'] == "true" and dev.states['ZonePlayerUUIDsInGroup'].find(",") != -1:
-                self.safe_debug("Replicate state to slave ZonePlayers...")
-                ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup'].split(',')
-                for rdev in indigo.devices.iter("self.ZonePlayer"):
-                    SlaveUID = rdev.states['ZP_LocalUID']
-                    GROUP_Coordinator = rdev.states['GROUP_Coordinator']
-                    if SlaveUID != dev.states['ZP_LocalUID'] and GROUP_Coordinator == "false" and SlaveUID in ZonePlayerUUIDsInGroup:
-                        if state == "ZP_CurrentURI":
-                            value = uri_group + dev.states['ZP_LocalUID']
-                        if self.plugin.stateUpdatesDebug:
-                            self.safe_debug(f"\t Updating Device: {rdev.name}, State: {state}, Value: {value}")
-                        if value is None or value == "None":
-                            rdev.updateStateOnServer(state, "")
-                        else:
-                            rdev.updateStateOnServer(state, value.encode('utf-8'))
 
-        except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
+
+
 
 
     def updateZoneGroupStates(self, dev):
@@ -3590,96 +4143,426 @@ class SonosPlugin(object):
             coordinator = group.coordinator
             group_members = group.members
 
-            group_id = group.uid  # Unique group ID
+            group_id = group.uid
             group_name = coordinator.player_name or "Unknown Group"
             member_uuids = [member.uid for member in group_members]
 
-            # Update the current device's group-related states
-            dev.updateStateOnServer("ZP_ZoneName", soco_device.player_name)
-            dev.updateStateOnServer("ZoneGroupID", group_id)
-            dev.updateStateOnServer("ZoneGroupName", group_name)
-            dev.updateStateOnServer("ZonePlayerUUIDsInGroup", ", ".join(member_uuids))
+            bonded_model_types = ["sub", "surround", "sl"]
+            coordinator_ip = coordinator.ip_address.strip()
+            coord_indigo = self.ip_to_indigo_device.get(coordinator_ip)
 
-            is_coordinator = soco_device.is_coordinator
-            dev.updateStateOnServer("GROUP_Coordinator", str(is_coordinator).lower())
-            dev.updateStateOnServer("GROUP_Name", group_name)
+            if not coord_indigo:
+                self.logger.warning(f"⚠️ Could not resolve Indigo device for coordinator: {coordinator.player_name} ({coordinator_ip})")
+                return
 
-            self.logger.info(f"✅ Updated zone states for {dev.name} → Group: {group_name} | Coordinator: {is_coordinator}")
+            # Get coordinator's actual grouped state from Indigo
+            coord_grouped_state = str(coord_indigo.states.get("Grouped", "")).lower()
+            is_grouped = (coord_grouped_state == "true")
 
-            # OPTIONAL: If you want to log detailed membership
             for member in group_members:
-                self.logger.debug(f"🧩 Group member → {member.player_name} ({member.ip_address}) [UUID: {member.uid}]")
+                member_ip = member.ip_address.strip()
+                member_name = member.player_name or ""
+
+                indigo_device = self.ip_to_indigo_device.get(member_ip)
+                if not indigo_device:
+                    self.logger.debug(f"Skipping update: No Indigo device found for IP {member_ip} ({member_name})")
+                    continue
+
+                is_coordinator = (coordinator_ip == member_ip)
+
+                # Lookup model_name from cache to determine bonding
+                cached_soco = self.soco_by_ip.get(member_ip)
+                model_name = getattr(cached_soco, "model_name", "").lower() if cached_soco else ""
+                is_bonded = any(bonded_type in model_name for bonded_type in bonded_model_types)
+
+                # Apply coordinator's grouped state to all members
+                new_grouped_state = "true" if is_grouped else "false"
+
+                # Update Indigo states
+                indigo_device.updateStateOnServer("ZP_ZoneName", member_name)
+                indigo_device.updateStateOnServer("ZoneGroupID", group_id)
+                indigo_device.updateStateOnServer("ZoneGroupName", group_name)
+                indigo_device.updateStateOnServer("ZonePlayerUUIDsInGroup", ", ".join(member_uuids))
+
+                if "GROUP_Coordinator" in indigo_device.states:
+                    indigo_device.updateStateOnServer("GROUP_Coordinator", str(is_coordinator).lower())
+                else:
+                    self.logger.warning(f"⚠️ Device '{indigo_device.name}' missing 'GROUP_Coordinator' state — skipping.")
+
+                if "GROUP_Name" in indigo_device.states:
+                    indigo_device.updateStateOnServer("GROUP_Name", group_name)
+                else:
+                    self.logger.warning(f"⚠️ Device '{indigo_device.name}' missing 'GROUP_Name' state — skipping.")
+
+                if "Grouped" in indigo_device.states:
+                    indigo_device.updateStateOnServer("Grouped", new_grouped_state)
+                else:
+                    self.logger.warning(f"⚠️ Device '{indigo_device.name}' missing 'Grouped' state — skipping.")
+
+                #self.logger.info(f"✅ Updated {indigo_device.name}: Coordinator={is_coordinator}, Grouped={new_grouped_state}, Bonded={is_bonded}")
 
         except Exception as e:
             self.logger.error(f"❌ Error updating zone group states for {dev.name}: {e}")
 
 
 
-    import shutil
-    import os
+
+
+
+
+    def get_soco_by_uuid(self, uuid):
+        for ip, soco in self.soco_by_ip.items():
+            try:
+                if soco.uid == uuid:
+                    return soco
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not retrieve UID from SoCo at {ip}: {e}")
+        self.logger.warning(f"🔍 No SoCo found for UUID {uuid}")
+        return None
+
+
+
+
 
 
     def dump_groups_to_log(self):
-        # Check if the SonosPlugin instance is properly initialized
-        if not self.soco_by_ip:
-            self.logger.warning("🚫 Sonos device map (soco_by_ip) is missing or not initialized.")
+        """
+        Dumps the current zone_group_state_cache to the Indigo log in a formatted table.
+        """
+        if not hasattr(self, "zone_group_state_cache") or not self.zone_group_state_cache:
+            self.logger.warning("🚫 No zone group data available to dump.")
             return
 
-        self.logger.info("📦 Dumping all currently grouped devices to the log...")
+        self.logger.info("\n📦 Dumping all currently grouped devices to the log...")
+        for group_id, group_data in self.zone_group_state_cache.items():
+            coord_uuid = group_data.get("coordinator")
+            members = group_data.get("members", [])
 
-        # Iterate over all the devices in the SoCo device map
-        seen_groups = set()  # To track already logged groups
-        for dev in self.soco_by_ip.values():
-            # Get the device IP
-            device_ip = dev.ip_address
-            # Retrieve the SoCo device object
-            soco_device = dev
+            display_rows = []
+            device_names_in_group = []
 
-            # Ensure that the device has a valid group (and it is a coordinator or part of a group)
-            if soco_device.group is None:
-                self.logger.info(f"🧑‍💻 {dev.player_name} with IP {device_ip} is not part of any group.")
+            for member in members:
+                name = member.get("name", "?")
+                ip = member.get("ip", "?")
+                bonded = member.get("bonded", False)
+                is_coordinator = member.get("coordinator", False)
+                role = "Master (Coordinator)" if is_coordinator else "Slave"
+
+                indigo_dev = self.ip_to_indigo_device.get(ip)
+                indigo_name = indigo_dev.name if indigo_dev else "(unmapped)"
+                indigo_id = indigo_dev.id if indigo_dev else "-"
+                grouped_state = indigo_dev.states.get("Grouped", "?") if indigo_dev else "?"
+                plugin_grouped = "true" if (grouped_state == True or grouped_state == "true") else "false"
+
+                device_names_in_group.append(name)
+
+                display_rows.append({
+                    "Device Name": name,
+                    "IP Address": ip,
+                    "Role": role,
+                    "Indigo Device": indigo_name,
+                    "Indigo ID": indigo_id,
+                    "Bonded": str(bonded),
+                    "Grouped": str(grouped_state),
+                    "Plugin State": plugin_grouped
+                })
+
+            # Format table header and rows
+            col_widths = [30, 20, 25, 30, 10, 8, 8, 10]
+            total_width = sum(col_widths) + len(col_widths) - 1
+
+            self.logger.info("")
+            self.logger.info(f"🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {device_names_in_group}")
+            self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                "Device Name", "IP Address", "Role", "Indigo Device", "Indigo ID",
+                "Bonded", "Grouped", "Plugin State"
+            ))
+            self.logger.info("=" * total_width)
+
+            for row in display_rows:
+                self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                    row["Device Name"],
+                    row["IP Address"],
+                    row["Role"],
+                    row["Indigo Device"],
+                    row["Indigo ID"],
+                    row["Bonded"],
+                    row["Grouped"],
+                    row["Plugin State"]
+                ))
+
+        # Consolidated plugin-level grouped view
+        self.logger.info("\n🔍 Consolidated Evaluated Grouped Logic Summary (plugin-level view):")
+
+        summary_col_widths = [32, 26, 8, 20, 20]
+        summary_total_width = sum(summary_col_widths)
+        header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+        row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+
+        self.logger.info("")
+        self.logger.info(header_fmt.format(
+            "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
+        ))
+        self.logger.info("=" * summary_total_width)
+        self.logger.info("")
+
+        # Build groups by coordinator name
+        groups_by_coordinator = {}
+
+        for ip, indigo_dev in self.ip_to_indigo_device.items():
+            soco_dev = self.soco_by_ip.get(ip)
+            if not soco_dev or not soco_dev.group:
+                continue
+            coord_name = soco_dev.group.coordinator.player_name if soco_dev.group.coordinator else "?"
+            groups_by_coordinator.setdefault(coord_name, []).append((soco_dev, indigo_dev))
+
+        # Output block for each group
+        for coordinator_name in sorted(groups_by_coordinator.keys()):
+            self.logger.info(f"🎧 Group: {coordinator_name}")
+            self.logger.info("-" * summary_total_width)
+
+            # Determine the grouped state from the coordinator
+            group_members = groups_by_coordinator[coordinator_name]
+            coord_dev = next((d for s, d in group_members if s == s.group.coordinator), None)
+            coord_grouped_state = coord_dev.states.get("Grouped", "?") if coord_dev else "?"
+
+            for soco_dev, indigo_dev in sorted(group_members, key=lambda tup: tup[1].name.lower()):
+                is_coord = (soco_dev == soco_dev.group.coordinator)
+                role = "Master (Coordinator)" if is_coord else "Slave"
+                bonded = any(b in indigo_dev.name.lower() for b in ["sub"])
+                group_name = coordinator_name
+
+                # Show coordinator's grouped state for all members
+                grouped = coord_grouped_state
+                emoji_prefix = "🔹" if is_coord else "  "
+                bonded_display = "🎯 True" if bonded else "False"
+                grouped_display = (
+                    "✅ true" if grouped == True or grouped == "true" else
+                    "❌ false" if grouped == False or grouped == "false" else
+                    f"❓ {grouped}"
+                )
+
+                self.logger.info(row_fmt.format(
+                    emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
+                    role,
+                    bonded_display,
+                    grouped_display,
+                    group_name
+                ))
+
+            self.logger.info("")  # Spacer between groups
+
+        self.logger.info("")  # Final spacer
+
+
+
+
+
+
+    def parse_zone_group_state(self, xml_data):
+        import xml.etree.ElementTree as ET
+        group_dict = {}
+
+        self.logger.warning("🛠 ENTERED parse_zone_group_state()")
+
+        # Ensure xml_data is a str (not bytes)
+        if isinstance(xml_data, bytes):
+            try:
+                xml_data = xml_data.decode("utf-8", errors="replace")
+                self.logger.debug("🔧 XML data was bytes, decoded to UTF-8.")
+            except Exception as decode_err:
+                self.logger.error(f"❌ Failed to decode XML data: {decode_err}")
+                return {}
+
+        self.logger.warning(f"📨 Incoming XML data length: {len(xml_data)}")
+        self.logger.warning(f"🔎 First 200 chars: {xml_data[:200]}")
+
+        try:
+            root = ET.fromstring(xml_data)
+            for zg in root.findall(".//ZoneGroup"):
+                coordinator = zg.get("Coordinator")
+                group_id = zg.get("ID", coordinator)  # fallback to UUID if ID is missing
+                members = []
+
+                for member in zg.findall("ZoneGroupMember"):
+                    zone_name = member.get("ZoneName", "")
+                    if "sub" in zone_name.lower():
+                        self.logger.warning(f"🚫 Skipping bonded sub: {zone_name}")
+                        continue  # skip Sub devices
+
+                    uuid = member.get("UUID")
+                    location = member.get("Location", "")
+                    try:
+                        ip = location.split("//")[1].split(":")[0] if location else "?"
+                    except Exception:
+                        ip = "?"
+
+                    bonded = member.get("Invisible", "0") == "1"
+                    members.append({
+                        "uuid": uuid,
+                        "name": zone_name,
+                        "ip": ip,
+                        "bonded": bonded,
+                        "coordinator": (uuid == coordinator)
+                    })
+
+                if members:
+                    group_dict[group_id] = {
+                        "coordinator": coordinator,
+                        "members": members
+                    }
+
+            self.logger.warning(f"✅ Parsed {len(group_dict)} group(s) from ZoneGroupState.")
+            for gid, group in group_dict.items():
+                for m in group["members"]:
+                    bonded = " (Bonded)" if m["bonded"] else ""
+                    coordinator = " (Coordinator)" if m["coordinator"] else ""
+                    self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded}{coordinator}")
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to parse ZoneGroupState XML: {e}")
+            return {}
+
+        return group_dict
+
+
+
+
+
+
+    def fetch_live_topology(self, ip):
+        import xml.etree.ElementTree as ET
+        import requests
+
+        try:
+            url = f"http://{ip}:1400/status/topology"
+            resp = requests.get(url, timeout=3)
+            resp.raise_for_status()
+            tree = ET.fromstring(resp.content)
+
+            groups = {}
+            for zp in tree.findall(".//ZonePlayer"):
+                uuid = zp.text.strip().replace("uuid:", "")
+                name = zp.attrib.get("zoneName", "Unknown")
+                coord = zp.attrib.get("coordinator", "false").lower() == "true"
+                group = zp.attrib.get("group", "Unknown")
+                ip = zp.attrib.get("location", "").split("//")[-1].split(":")[0]
+                groups[uuid] = {
+                    "name": name,
+                    "ip": ip,
+                    "group": group,
+                    "is_coordinator": coord
+                }
+
+            return groups
+
+        except Exception as e:
+            self.logger.error(f"❌ fetch_live_topology({ip}) failed: {e}")
+            return {}
+
+
+
+
+
+
+
+
+
+
+    def evaluate_and_update_grouped_states(self):
+
+        now = time.time()
+        if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
+            self.logger.warning("⏱️ Skipping group re-evaluation — too soon since last update.")
+            return
+        self._last_group_eval = now
+
+
+        if not self.soco_by_ip:
+            self.logger.warning("🚫 SoCo device map is empty — skipping group evaluation.")
+            return
+
+        if not self.zone_group_state_cache:
+            self.logger.warning("🚫 zone_group_state_cache is empty — no group info available.")
+            return
+
+        bonded_names = ["sub"]
+        seen_groups = set()
+
+        self.logger.warning("🔄 Evaluating current group states for all Sonos devices...")
+
+        for group_uid, group_data in self.zone_group_state_cache.items():
+            coordinator_entry = group_data.get("coordinator")
+            member_entries = group_data.get("members", [])
+
+            if group_uid in seen_groups:
+                continue
+            seen_groups.add(group_uid)
+
+            coordinator_uuid = coordinator_entry.get("uuid") if isinstance(coordinator_entry, dict) else coordinator_entry
+            coordinator = self.get_soco_by_uuid(coordinator_uuid)
+
+            if not coordinator:
+                self.logger.warning(f"⚠️ Could not resolve SoCo coordinator for UUID: {coordinator_entry}")
                 continue
 
-            # Check if the current device is the coordinator (master)
-            group = soco_device.group
-            coordinator = group.coordinator
-            role = "Master (Coordinator)" if soco_device == coordinator else "Slave"
-
-            # Avoid repeating the log for the same group
-            if group in seen_groups:
-                continue
-            seen_groups.add(group)
-
-            # List all devices in the group (including the master)
-            devices_in_group = group.members
-
-            # Add a space separator before the devices list and log the group details
-            self.logger.info("\n🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {[d.player_name for d in devices_in_group]}")
-
-            # Print header after the group devices list for each group
-            header = f"{'Device Name':<25} {'IP Address':<20} {'Role':<25} {'Indigo Device Name':<25} {'Indigo Device Number':<20}"
-            self.logger.info(header)
-            self.logger.info("=" * len(header))  # Print a separator line
-
-            # Iterate through all devices in the group and log their information
-            for rdev in devices_in_group:
-                # Check the role (Coordinator or Slave)
-                device_role = "Master (Coordinator)" if rdev == coordinator else "Slave"
-
-                # Fetch the corresponding Indigo device for the slave (by IP)
-                indigo_slave_device = None
-                for indigo_device in indigo.devices:
-                    if indigo_device.address == rdev.ip_address:
-                        indigo_slave_device = indigo_device
-                        break
-
-                # Log if no corresponding Indigo device is found
-                if not indigo_slave_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for slave device {rdev.player_name} with IP {rdev.ip_address}.")
+            members = []
+            for entry in member_entries:
+                member_uuid = entry.get("uuid") if isinstance(entry, dict) else entry
+                soco_dev = self.get_soco_by_uuid(member_uuid)
+                if soco_dev:
+                    members.append(soco_dev)
                 else:
-                    # Format the row with more spacing and log it in a table format
-                    row = f"{rdev.player_name:<25} {rdev.ip_address:<20} {device_role:<25} {indigo_slave_device.name:<25} {indigo_slave_device.id:<20}"
-                    self.logger.info(row)
+                    self.logger.warning(f"⚠️ Could not resolve SoCo device for UUID: {entry}")
+
+            if not members:
+                self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
+                continue
+
+            # Determine grouped status by counting unique non-bonded member names
+            non_bonded_members = [
+                m for m in members
+                if not any(b in m.player_name.lower() for b in bonded_names)
+            ]
+            unique_names = set(m.player_name.lower() for m in non_bonded_members)
+            is_grouped = len(unique_names) > 1
+
+            for member in members:
+                member_ip = member.ip_address.strip()
+                indigo_device = self.ip_to_indigo_device.get(member_ip)
+                if not indigo_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip})")
+                    continue
+
+                expected_grouped = "true" if is_grouped else "false"
+                expected_coord = "true" if member == coordinator else "false"
+
+                grouped_val = indigo_device.states.get("Grouped", "undefined")
+                coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
+
+#                self.logger.info(
+#                    f"🔍 Evaluated: {indigo_device.name} → "
+#                    f"Grouped (was): {grouped_val}, "
+#                    f"GROUP_Coordinator (was): {coord_val}, "
+#                    f"Computed Grouped: {expected_grouped}, Coordinator: {expected_coord}"
+#               )
+
+                # Update Grouped if changed
+                if str(grouped_val).lower() != expected_grouped:
+                    self.logger.info(f"🆙 Updating 'Grouped' state for {indigo_device.name} → {expected_grouped}")
+                    indigo_device.updateStateOnServer("Grouped", expected_grouped)
+
+                # Update GROUP_Coordinator if changed
+                if str(coord_val).lower() != expected_coord:
+                    self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
+                    indigo_device.updateStateOnServer("GROUP_Coordinator", expected_coord)
+
+
+
+
+
+
+
 
 
     def refresh_group_membership(self, indigo_device, soco_device):
@@ -3697,47 +4580,16 @@ class SonosPlugin(object):
             indigo_device.updateStateOnServer("GROUP_Name", current_group_name)
             self.safe_debug(f"🔄 Updated {indigo_device.name} → GROUP_Coordinator: {is_coordinator}, GROUP_Name: {current_group_name}")
 
-            # Handle Artwork
-            ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
-            DEFAULT_ARTWORK_PATH = ARTWORK_FOLDER + "default_artwork.jpg"
-            artwork_path = f"{ARTWORK_FOLDER}sonos_art_{indigo_device.address}.jpg"
-
-            if is_coordinator:
-                # Standalone or master — fetch own artwork or fallback
-                meta = soco_device.get_current_track_info()
-                album_art_uri = meta.get('album_art', '')
-                if album_art_uri and album_art_uri.startswith('/'):
-                    album_art_uri = f"http://{coordinator_ip}:1400{album_art_uri}"
-
-                if album_art_uri.startswith("http"):
-                    try:
-                        response = requests.get(album_art_uri, timeout=5)
-                        if response.status_code == 200:
-                            img_data = response.content
-                            image = Image.open(io.BytesIO(img_data))
-                            image.thumbnail((500, 500))
-                            image = image.convert("RGB")
-                            image.save(artwork_path, format="JPEG", quality=75)
-                            self.safe_debug(f"🖼️ Updated artwork for {indigo_device.name} from {album_art_uri}")
-                        else:
-                            raise Exception(f"HTTP {response.status_code}")
-                    except Exception as e:
-                        self.logger.warning(f"⚠️ Failed to fetch artwork for {indigo_device.name}: {e}")
-                        if os.path.exists(DEFAULT_ARTWORK_PATH):
-                            shutil.copyfile(DEFAULT_ARTWORK_PATH, artwork_path)
+            # === Centralized album art handling ===
+            try:
+                if indigo_device:
+                    self.update_album_artwork(dev=indigo_device, zone_ip=indigo_device.address.strip())
                 else:
-                    self.safe_debug(f"⚠️ No valid album_art_uri for {indigo_device.name}, using default")
-                    if os.path.exists(DEFAULT_ARTWORK_PATH):
-                        shutil.copyfile(DEFAULT_ARTWORK_PATH, artwork_path)
+                    self.logger.warning("⚠️ Skipping artwork update — Indigo device is undefined")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to update album artwork for {indigo_device.name if indigo_device else 'Unknown'}: {e}")
 
-                indigo_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_device.address}.jpg")
-            else:
-                # Slave — point to master's artwork
-                master_art_path = f"http://localhost:8888/sonos_art_{coordinator_ip}.jpg"
-                indigo_device.updateStateOnServer("ZP_ART", master_art_path)
-                self.safe_debug(f"🖼️ Slave {indigo_device.name} linked to master artwork: {master_art_path}")
-
-            # Force refresh of key player states
+            # === Playback state refresh for coordinator ===
             if is_coordinator:
                 current_track_info = soco_device.get_current_track_info()
                 transport_info = soco_device.get_current_transport_info()
@@ -3746,23 +4598,33 @@ class SonosPlugin(object):
                 current_track_uri = current_track_info.get('uri', '')
                 current_title = current_track_info.get('title', '')
                 current_artist = current_track_info.get('artist', '')
+                current_creator = current_track_info.get('creator', '')                
 
                 indigo_device.updateStateOnServer("ZP_STATE", zp_state)
                 indigo_device.updateStateOnServer("ZP_TRACK", current_title or "")
                 indigo_device.updateStateOnServer("ZP_ARTIST", current_artist or "")
+                indigo_device.updateStateOnServer("ZP_CREATOR", current_creator or "")                
                 indigo_device.updateStateOnServer("ZP_CurrentTrackURI", current_track_uri or "")
 
+                # Derive and update ZP_SOURCE
+                try:
+                    source = self.determineSource(indigo_device, soco_device, transport_info, current_track_info)
+                    indigo_device.updateStateOnServer("ZP_SOURCE", source)
+                    self.safe_debug(f"🛰️ Set {indigo_device.name} ZP_SOURCE → {source}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Failed to determine ZP_SOURCE for {indigo_device.name}: {e}")
+
                 self.safe_debug(f"🔄 Refreshed standalone states for {indigo_device.name} → State: {zp_state}, Track: {current_title}, Artist: {current_artist}")
+
             else:
-                # Sync slave states from coordinator device
-                master_dev = None
-                for dev in indigo.devices:
-                    if dev.address.strip() == coordinator_ip:
-                        master_dev = dev
-                        break
+                # === Sync slave states from coordinator device ===
+                master_dev = next(
+                    (dev for dev in indigo.devices if dev.address.strip() == coordinator_ip),
+                    None
+                )
 
                 if master_dev:
-                    for state_key in ["ZP_STATE", "ZP_TRACK", "ZP_ARTIST", "ZP_CurrentTrackURI", "ZP_ART"]:
+                    for state_key in ["ZP_STATE", "ZP_TRACK", "ZP_ARTIST", "ZP_CREATOR", "ZP_SOURCE", "ZP_MUTE","ZP_CurrentTrackURI", "ZP_ART"]:
                         master_value = master_dev.states.get(state_key, "")
                         indigo_device.updateStateOnServer(state_key, master_value)
                         self.safe_debug(f"🔄 Synced slave {indigo_device.name} {state_key} → {master_value}")
@@ -3773,149 +4635,515 @@ class SonosPlugin(object):
             self.logger.error(f"❌ Exception in refresh_group_membership for {indigo_device.name}: {e}")
 
 
+    def determineSource(self, indigo_device, soco_device, transport_info, track_info):
+        try:
+            uri = track_info.get("uri", "") or ""
+            if "x-sonosapi-stream" in uri:
+                return "SiriusXM"
+            elif "pandora.com" in uri:
+                return "Pandora"
+            elif "spotify" in uri:
+                return "Spotify"
+            elif "tunein" in uri:
+                return "TuneIn"
+            elif "airplay" in uri:
+                return "AirPlay"
+            elif uri.startswith("x-rincon-mp3radio:"):
+                return "Internet Radio"
+            elif uri.startswith("x-rincon-queue:"):
+                return "Queue"
+            else:
+                return "Unknown"
+        except Exception as e:
+            self.logger.warning(f"⚠️ determineSource failed for {indigo_device.name}: {e}")
+            return "Unknown"
 
 
 
+
+
+
+
+
+
+
+
+
+    def getIndigoDeviceFromEvent(self, event_obj):
+        sid = getattr(event_obj, "sid", "")
+        for dev_id, subs in self.soco_subs.items():
+            if any(sub.sid == sid for sub in subs.values()):
+                return indigo.devices[int(dev_id)]
+        return None
+
+
+
+
+    def update_album_artwork(self, event_obj=None, dev=None, zone_ip=None):
+        import requests, shutil, io, filecmp, time
+        from PIL import Image
+
+        ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
+        DEFAULT_ART_PATH = ARTWORK_FOLDER + "default_artwork.jpg"
+        DEFAULT_ART_SRC = "/Library/Application Support/Perceptive Automation/Indigo 2024.2/Plugins/Sonos.indigoPlugin/Contents/Server Plugin/default_artwork.jpg"
+        MAX_DOWNLOAD_ATTEMPTS = 3
+
+        os.makedirs(ARTWORK_FOLDER, exist_ok=True)
+        if not os.path.exists(DEFAULT_ART_PATH):
+            try:
+                shutil.copy(DEFAULT_ART_SRC, DEFAULT_ART_PATH)
+                self.logger.info(f"✅ Default artwork copied to {DEFAULT_ART_PATH}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to copy default artwork: {e}")
+                return
+
+        # ✅ Step 1: Infer zone_ip from dev if not provided
+        if not zone_ip and dev:
+            try:
+                zone_ip = dev.address.strip()
+                if not zone_ip:
+                    self.logger.warning(f"⚠️ dev.address is empty for {dev.name}")
+                    zone_ip = None
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to extract IP from dev: {e}")
+                zone_ip = None
+
+        # ✅ Step 2: Try resolving zone_ip from event if not yet available
+        if not zone_ip and event_obj:
+            zone_ip = getattr(getattr(event_obj, "soco", None), "ip_address", None)
+
+        # ✅ Step 3: Infer dev from event if not passed
+        if not dev and event_obj:
+            dev = self.getIndigoDeviceFromEvent(event_obj)
+
+        # 🚫 Final guard: require both dev and zone_ip
+        if not dev or not zone_ip:
+            self.logger.warning(f"⚠️ Could not resolve device or IP for album art update — dev: {getattr(dev, 'name', '?')} | zone_ip: {zone_ip}")
+            return
+
+        self.logger.debug(f"🎯 Art update entry → dev={dev}, zone_ip={zone_ip}, event_meta={getattr(event_obj, 'variables', {}).get('current_track_meta_data', None)}")
+
+        # ✅ Step 4: Locate SoCo device and group info
+        soco_device = self.getSoCoDeviceByIP(zone_ip)
+        if not soco_device:
+            self.logger.warning(f"⚠️ No SoCo device found for IP {zone_ip}")
+            return
+
+        try:
+            group = soco_device.group
+            coordinator = group.coordinator
+        except Exception as e:
+            self.logger.warning(f"⚠️ Failed to access group or coordinator for {zone_ip}: {e}")
+            return
+
+        is_master = (coordinator.ip_address.strip() == zone_ip)
+        coordinator_dev = self.ip_to_indigo_device.get(coordinator.ip_address.strip())
+
+        master_artwork_path = f"{ARTWORK_FOLDER}sonos_art_{coordinator.ip_address}.jpg"
+        art_url = None
+
+        # === Coordinator logic: fetch and save artwork ===
+        if is_master and event_obj:
+            meta = event_obj.variables.get("current_track_meta_data", None)
+            album_art_uri = getattr(meta, "album_art_uri", "") if meta else ""
+
+            if album_art_uri.startswith("/"):
+                album_art_uri = f"http://{zone_ip}:1400{album_art_uri}"
+
+            if album_art_uri:
+                for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+                    try:
+                        self.logger.debug(f"🎨 Attempting album art fetch from {album_art_uri} (attempt {attempt})")
+                        response = requests.get(album_art_uri, timeout=5)
+                        if response.status_code == 200:
+                            image = Image.open(io.BytesIO(response.content))
+                            image.thumbnail((500, 500))
+                            image = image.convert("RGB")
+                            image.save(master_artwork_path, format="JPEG", quality=75)
+                            art_url = f"http://localhost:8888/sonos_art_{coordinator.ip_address}.jpg"
+                            self.logger.info(f"🖼️ Album art saved for {coordinator.player_name}")
+                            break
+                    except Exception as e:
+                        self.logger.warning(f"⚠️ Failed to fetch album art: {e}")
+                        time.sleep(0.5)
+
+            if not os.path.exists(master_artwork_path):
+                shutil.copyfile(DEFAULT_ART_PATH, master_artwork_path)
+                art_url = f"http://localhost:8888/default_artwork.jpg"
+                self.logger.info("🖼️ Used default artwork due to fetch failure")
+
+            if coordinator_dev:
+                coordinator_dev.updateStateOnServer("ZP_ART", art_url)
+
+        # 🛡️ Prevent slave copy if coordinator is not grouped
+        if not coordinator_dev or coordinator_dev.states.get("Grouped", "false") != "true":
+            self.logger.debug(f"⛔ Skipping artwork propagation — {coordinator_dev.name if coordinator_dev else 'Unknown'} is not grouped")
+            return
+
+        # === Slave devices: copy master art ===
+        for member in group.members:
+            member_ip = member.ip_address.strip()
+            if member_ip == coordinator.ip_address.strip():
+                continue
+
+            slave_dev = self.ip_to_indigo_device.get(member_ip)
+            if not slave_dev:
+                self.logger.warning(f"⚠️ No Indigo device for slave {member.player_name} ({member_ip})")
+                continue
+
+            slave_art_path = f"{ARTWORK_FOLDER}sonos_art_{member_ip}.jpg"
+            try:
+                if not os.path.exists(slave_art_path) or not filecmp.cmp(master_artwork_path, slave_art_path, shallow=False):
+                    shutil.copyfile(master_artwork_path, slave_art_path)
+                    self.logger.info(f"🖼️ Copied artwork to slave {slave_dev.name}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed copying art to {slave_dev.name}: {e}")
+                slave_art_path = DEFAULT_ART_PATH
+
+            slave_dev.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{member_ip}.jpg")
+
+        # === Standalone player handling if no event and not a coordinator ===
+        if not is_master and not event_obj:
+            dev.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{zone_ip}.jpg")
+
+        
+
+
+
+
+
+
+    def updateStateOnServer(self, dev, state, value):
+        if self.plugin.stateUpdatesDebug:
+            self.plugin.debugLog(u"\t Updating Device: %s, State: %s, Value: %s" % (dev.name, state, value))
+        GROUP_Coordinator = dev.states['GROUP_Coordinator']
+        if GROUP_Coordinator == "false" and state in ZoneGroupStates:
+            pass
+        else:
+            if value == None or value == "None":
+                dev.updateStateOnServer(state, "")
+            else:
+                dev.updateStateOnServer(state, value.encode('utf-8'))
+
+        # Replicate states to slave ZonePlayers
+        if state in ZoneGroupStates and dev.states['GROUP_Coordinator'] == "true" and dev.states['ZonePlayerUUIDsInGroup'].find(",") != -1:
+            self.plugin.debugLog("Replicate state to slave ZonePlayers...")
+            ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup'].split(',')
+            for rdev in indigo.devices.iter("self.ZonePlayer"):
+                SlaveUID = rdev.states['ZP_LocalUID']
+                GROUP_Coordinator = rdev.states['GROUP_Coordinator']
+                if SlaveUID != dev.states['ZP_LocalUID'] and GROUP_Coordinator == "false" and SlaveUID in ZonePlayerUUIDsInGroup:
+                    if state == "ZP_CurrentURI":
+                        value = uri_group + dev.states['ZP_LocalUID']
+                    if self.plugin.stateUpdatesDebug:
+                        self.plugin.debugLog(u"\t Updating Device: %s, State: %s, Value: %s" % (rdev.name, state, value))
+                    if value == None or value == "None":
+                        rdev.updateStateOnServer(state, "")
+                    else:
+                        rdev.updateStateOnServer(state, value.encode('utf-8'))
 
 
 
     def updateStateOnSlaves(self, dev):
-        try:
-            self.safe_debug("Update all states to slave ZonePlayers...")
+            self.plugin.debugLog("Update all states to slave ZonePlayers...")
+            ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup']
+            for rdev in indigo.devices.iter("self.ZonePlayer"):
+                SlaveUID = rdev.states['ZP_LocalUID']
+                GROUP_Coordinator = rdev.states['GROUP_Coordinator']
+                # Do not update if you are yourself, not a slave, and not in the group
+                if SlaveUID != dev.states['ZP_LocalUID'] and GROUP_Coordinator == "false" and SlaveUID in ZonePlayerUUIDsInGroup:
+                    for state in list(ZoneGroupStates):
+                        if state == "ZP_CurrentURI":
+                            value = uri_group + dev.states['ZP_LocalUID']
+                        else:
+                            value = dev.states[state]
+                        if self.plugin.stateUpdatesDebug:
+                            self.plugin.debugLog(u"\t Updating Slave Device: %s, State: %s, Value: %s" % (rdev.name, state, value))
+                        rdev.updateStateOnServer(state, value)
+                    rdev.updateStateOnServer("ZP_ART", dev.states['ZP_ART'])
+                    try:
+                        shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg", \
+                            "/Library/Application Support/Perceptive Automation/images/Sonos/"+rdev.states['ZP_ZoneName']+"_art.jpg")
+                    except:
+                        pass
 
-            ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
-            DEFAULT_ARTWORK_PATH = ARTWORK_FOLDER + "default_artwork.jpg"
-            DEFAULT_ARTWORK_SOURCE = "/Library/Application Support/Perceptive Automation/Indigo 2024.2/Plugins/Sonos.indigoPlugin/Contents/Server Plugin/default_artwork.jpg"
-            MAX_DOWNLOAD_ATTEMPTS = 3
-
-            os.makedirs(ARTWORK_FOLDER, exist_ok=True)
-
-            if not os.path.exists(DEFAULT_ARTWORK_PATH):
+    def copyStateFromMaster(self, dev):
+        self.plugin.debugLog("Copy states from master ZonePlayer...")
+        (MasterUID,x) = dev.states['GROUP_Name'].split(":")
+        for mdev in indigo.devices.iter("self.ZonePlayer"):
+            if mdev.states['ZP_LocalUID'] == MasterUID:
+                for state in list(ZoneGroupStates):
+                    if state == "ZP_CurrentURI":
+                        value = uri_group + mdev.states['ZP_LocalUID']
+                    else:
+                        value = mdev.states[state]
+                    if self.plugin.stateUpdatesDebug:
+                        self.plugin.debugLog(u"\t Updating Slave Device: %s, State: %s, Value: %s" % (dev.name, state, value))
+                    dev.updateStateOnServer(state, value)
+                dev.updateStateOnServer("ZP_ART", mdev.states['ZP_ART'])
                 try:
-                    shutil.copy(DEFAULT_ARTWORK_SOURCE, DEFAULT_ARTWORK_PATH)
-                    self.logger.info(f"✅ Default artwork copied to {DEFAULT_ARTWORK_PATH}")
-                except Exception as e:
-                    self.logger.error(f"❌ Failed to copy default artwork to {DEFAULT_ARTWORK_PATH}: {e}")
+                    shutil.copy2("/Library/Application Support/Perceptive Automation/images/Sonos/"+mdev.states['ZP_ZoneName']+"_art.jpg", \
+                        "/Library/Application Support/Perceptive Automation/images/Sonos/"+dev.states['ZP_ZoneName']+"_art.jpg")
+                except:
+                    pass
+        
 
-            device_ip = dev.address.strip()
-            self.safe_debug(f"🧑‍💻 Device IP: {device_ip}")
 
-            soco_device = self.soco_by_ip.get(device_ip)
+# Check for messages
+    #def initZones(self, dev):
+    def initZones(self, dev, soco_device=None):        
+        MyzonePlayerID='120169368'
+        zoneIP = dev.pluginProps["address"]
+        self.plugin.debugLog(u"Resetting States for zone: %s" % zoneIP)
+        self.updateStateOnServer (dev, "ZP_ALBUM", "")
+        self.updateStateOnServer (dev, "ZP_ART", "")
+        self.updateStateOnServer (dev, "ZP_ARTIST", "")
+        self.updateStateOnServer (dev, "ZP_SOURCE", "")        
+        self.updateStateOnServer (dev, "ZP_CREATOR", "")
+        self.updateStateOnServer (dev, "ZP_CurrentURI", "")
+        self.updateStateOnServer (dev, "ZP_DURATION", "")
+        self.updateStateOnServer (dev, "ZP_RELATIVE", "")
+        self.updateStateOnServer (dev, "ZP_INFO", "")
+        self.updateStateOnServer (dev, "ZP_MUTE", "")
+        self.updateStateOnServer (dev, "ZP_STATE", "")
+        self.updateStateOnServer (dev, "ZP_STATION", "")
+        self.updateStateOnServer (dev, "ZP_TRACK", "")
+        self.updateStateOnServer (dev, "ZP_VOLUME", "")
+        self.updateStateOnServer (dev, "ZP_VOLUME_FIXED", "")
+        self.updateStateOnServer (dev, "ZP_BASS", "")
+        self.updateStateOnServer (dev, "ZP_TREBLE", "")
+        self.updateStateOnServer (dev, "ZP_ZoneName", "")
+        self.updateStateOnServer (dev, "ZP_LocalUID", "")
+        self.updateStateOnServer (dev, "ZP_AIName", "")
+        self.updateStateOnServer (dev, "ZP_AIPath", "")
+        self.updateStateOnServer (dev, "ZP_NALBUM", "")
+        self.updateStateOnServer (dev, "ZP_NART", "")
+        self.updateStateOnServer (dev, "ZP_NARTIST", "")
+        self.updateStateOnServer (dev, "ZP_NCREATOR", "")       
+        self.updateStateOnServer (dev, "ZP_NTRACK", "")
+        self.updateStateOnServer (dev, "Q_Crossfade", "off")
+        self.updateStateOnServer (dev, "Q_Repeat", "off")
+        self.updateStateOnServer (dev, "Q_RepeatOne", "off")
+        self.updateStateOnServer (dev, "Q_Shuffle", "off")
+        self.updateStateOnServer (dev, "Q_Number", "0")
+        self.updateStateOnServer (dev, "Q_ObjectID", "")
+        self.updateStateOnServer (dev, "GROUP_Coordinator", "")
+        self.updateStateOnServer (dev, "GROUP_Name", "")
+        self.updateStateOnServer (dev, "ZP_CurrentTrack", "")
+        self.updateStateOnServer (dev, "ZP_CurrentTrackURI", "")
+        self.updateStateOnServer (dev, "ZoneGroupID", "")
+        self.updateStateOnServer (dev, "ZoneGroupName", "")
+        self.updateStateOnServer (dev, "ZonePlayerUUIDsInGroup", "")
+        self.updateStateOnServer (dev, "alive", "")
+        self.updateStateOnServer (dev, "bootseq", "")
+
+        url = u"http://" + zoneIP + ":1400/status/zp"
+        try:
+            response = requests.get(url)
+            root = ET.fromstring(response.content)
+            ZoneName = root.findtext('.//ZoneName')
+            LocalUID = root.findtext('.//LocalUID')
+            #SerialNumber = '5C-AA-FD-5B-5C-D6:4'
+            MyzonePlayerID='120169368'
+            SerialNumber = root.findtext('.//SerialNumber')
+        except:
+            self.plugin.errorLog("Error getting ZonePlayer data: %s" % url)
+            self.plugin.errorLog("  Offending ZonePlayer: %s" % dev.name)
+            self.plugin.errorLog("  ZonePlayer may be physically turned off or in a bad state.")
+            self.plugin.errorLog("  Please disable communications or remove from Indigo.")
+            self.deviceList.remove(dev.id)
+            dev.setErrorStateOnServer(u"error")
+            return
+
+        #self.updateStateOnServer (dev, "ZP_ZoneName", ZPInfo.findtext('ZoneName').decode('utf-8'))
+        # Allow for special characters in ZoneName
+        self.updateStateOnServer (dev, "ZP_ZoneName", ZoneName)
+        self.updateStateOnServer (dev, "ZP_LocalUID", LocalUID)
+        self.updateStateOnServer (dev, "SerialNumber", SerialNumber)
+
+        self.getModelName (dev)
+
+        self.updateZoneGroupStates (dev)
+        self.updateZoneTopology (dev)
+
+        indigo.server.log ("Adding ZonePlayer: %s, %s, %s" % (zoneIP, LocalUID, dev.name))
+        self.ZonePlayers.append (LocalUID)
+        if hasattr(dev, "pluginProps"):
+            self.ZPTypes.append([LocalUID, dict(dev.pluginProps).get("model", "")])
+        else:
+            self.logger.warning(f"⚠️ Skipping pluginProps access — dev is not an Indigo device (type: {type(dev)})")
+
+        self.zonePlayerState[dev.id] = {'zonePlayerAlive':True}
+        self.updateStateOnServer (dev, "alive", time.asctime())
+
+        if self.EventProcessor == "SoCo":
+            self.socoSubscribe(dev, soco_device)
+
+
+    def getModelName(self, dev):
+        url = u"http://" + dev.pluginProps["address"] + ":1400/xml/device_description.xml"
+        response = requests.get(url)
+        if response.ok:
+            root = ET.fromstring(response.content)
+            ModelName = root.findtext('.//{urn:schemas-upnp-org:device-1-0}displayName')
+            self.updateStateOnServer (dev, "ModelName", ModelName)
+        else:
+            self.plugin.errorLog("[%s] Cannot get ModelName for ZonePlayer: %s" % (time.asctime(), dev.name))
+
+
+
+
+    def updateZoneTopology(self, dev):
+        # Deprecated in Sonos 10.1
+        #url = u"http://" + dev.pluginProps["address"] + ":1400/status/topology"
+        #response = requests.get(url)
+        #if response.ok:
+        #   root = ET.fromstring(response.content)
+        #   for ZonePlayer in root.findall("./ZonePlayers/ZonePlayer"):
+        #       if ZonePlayer.get('uuid') == dev.states['ZP_LocalUID']:
+        #           self.updateStateOnServer (dev, "GROUP_Coordinator", ZonePlayer.get('coordinator'))
+        #           self.updateStateOnServer (dev, "bootseq", ZonePlayer.get('bootseq'))
+        #else:
+        #   self.plugin.errorLog("[%s] Cannot get ZoneGroupTopology for ZonePlayer: %s" % (time.asctime(), dev.name))
+
+        res = self.restoreString(self.SOAPSend (self.rootZPIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupState", ""),1)
+        ZGS = ET.fromstring(res)
+        for ZoneGroup in ZGS.findall('.//ZoneGroup'):
+            for ZonePlayer in ZoneGroup.findall('.//ZoneGroupMember'):
+                if ZonePlayer.attrib['UUID'] == dev.states['ZP_LocalUID']:
+                    if ZonePlayer.attrib['UUID'] == ZoneGroup.attrib['Coordinator']:
+                        self.updateStateOnServer (dev, "GROUP_Coordinator", 'true')
+                    else:
+                        self.updateStateOnServer (dev, "GROUP_Coordinator", 'false')
+                    self.updateStateOnServer (dev, "GROUP_Name", ZoneGroup.attrib['ID'])                
+                    self.updateStateOnServer (dev, "bootseq", ZonePlayer.attrib['BootSeq'])
+ 
+
+    def updateZoneGroupStates(self, dev):
+        zoneIP = dev.pluginProps["address"]
+        res = self.SOAPSend(zoneIP, "/ZonePlayer", "/ZoneGroupTopology", "GetZoneGroupAttributes", "")
+
+        # ✅ Removed .decode('utf-8') – not needed in Python 3
+        self.updateStateOnServer(dev, "ZoneGroupName", self.parseCurrentZoneGroupName(res))
+        self.updateStateOnServer(dev, "ZoneGroupID", self.parseCurrentZoneGroupID(res))
+        self.updateStateOnServer(dev, "ZonePlayerUUIDsInGroup", self.parseCurrentZonePlayerUUIDsInGroup(res))
+
+
+    def parsePoint (self, res, startString, stopString):
+        loc = str(res).find(startString)
+        if (loc > 0):
+            loc_beg = loc + len(startString)
+            loc_end = str(res).find(stopString, loc_beg)
+            return (self.restoreString(str(res)[loc_beg:loc_end],0))
+        else:
+            return ""
+
+    def parseDirty (self, res, startString, stopString):
+        loc = str(res).find(startString)
+        if (loc > 0):
+            loc_beg = loc + len(startString)
+            loc_end = str(res).find(stopString, loc_beg)
+            return (str(res)[loc_beg:loc_end])
+        else:
+            return ""
+    
+    def parseFirstTrackNumberEnqueued(self, deviceId, res):
+        loc = str(res).find("<FirstTrackNumberEnqueued>")
+        if (loc > 0):
+            loc_beg = loc + len("<FirstTrackNumberEnqueued>")
+            loc_end = str(res).find("</FirstTrackNumberEnqueued>", loc_beg)
+            item = self.restoreString(str(res)[loc_beg:loc_end],0)
+            return item
+
+    def parseRelTime(self, deviceId, res):
+        return self.parsePoint (res, "<RelTime>", "</RelTime>")
+
+    def parseCurrentZoneGroupName(self, res):
+        return self.parsePoint (res, "<CurrentZoneGroupName>", "</CurrentZoneGroupName>")
+
+    def parseCurrentZoneGroupID(self, res):
+        return self.parsePoint (res, "<CurrentZoneGroupID>", "</CurrentZoneGroupID>")
+
+    def parseCurrentZonePlayerUUIDsInGroup(self, res):
+        return self.parsePoint (res, "<CurrentZonePlayerUUIDsInGroup>", "</CurrentZonePlayerUUIDsInGroup>")
+
+    def parseCurrentVolume(self, res):
+        return self.parsePoint (res, "<CurrentVolume>", "</CurrentVolume>")
+
+    def parseCurrentMute(self, res):
+        return self.parsePoint (res, "<CurrentMute>", "</CurrentMute>")
+
+    def parseCurrentTransportActions(self, res):
+        return self.parsePoint (res, "<Actions>", "</Actions>")
+
+    def parseErrorCode(self, res):
+        return self.parsePoint (res, "<errorCode>", "</errorCode>")
+
+    def parseBrowseNumberReturned(self, res):
+        return self.parsePoint (res, "<NumberReturned>", "</NumberReturned>")
+
+    def parseAssignedObjectID(self, res):
+        return self.parsePoint (res, "<AssignedObjectID>", "</AssignedObjectID>")
+
+    def parsePandoraToken(self, res):
+        return self.parsePoint (res, "&m=", "&f")
+
+    def playRadio(self, zoneIP, l2p):
+        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+l2p+"</CurrentURI><CurrentURIMetaData>&lt;DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"&gt;&lt;item id=\"-1\" parentID=\"-1\" restricted=\"true\"&gt;&lt;dc:title&gt;RADIO&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\"&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>")
+        self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+
+
+
+
+
+
+    def updateGroupPlaybackStates(self, coordinator_dev):
+        """
+        Runtime method: Propagates current playback metadata from the coordinator to all grouped slave devices.
+        Only runs after startup and assumes device states are generally initialized.
+        """
+        try:
+            self.logger.info(f"🔄 Runtime: Updating playback metadata to slaves for group '{coordinator_dev.states.get('GROUP_Name', 'Unknown')}'")
+
+            coordinator_ip = coordinator_dev.address.strip()
+            soco_device = self.soco_by_ip.get(coordinator_ip)
             if not soco_device:
-                self.logger.warning(f"⚠️ No SoCo device found for IP {device_ip}")
+                self.logger.warning(f"⚠️ Runtime: No SoCo found for coordinator {coordinator_dev.name} @ {coordinator_ip}")
                 return
 
             group = soco_device.group
-            coordinator = group.coordinator
-            devices_in_group = group.members
-            self.safe_debug(f"🧑‍💻 Devices in group: {[device.ip_address for device in devices_in_group]}")
-
-            coordinator_ip = coordinator.ip_address.strip()
-            coordinator_dev = None
-            for indigo_device in indigo.devices:
-                if indigo_device.address.strip() == coordinator_ip:
-                    coordinator_dev = indigo_device
-                    break
-
-            if not coordinator_dev:
-                self.logger.warning(f"⚠️ Coordinator Indigo device not found for IP {coordinator_ip}; skipping slave updates")
+            if not group:
+                self.logger.warning(f"⚠️ Runtime: SoCo group is None for {coordinator_dev.name}")
                 return
 
-            master_group_name = coordinator.player_name or "Unknown Group"
+            group_member_ips = {member.ip_address.strip() for member in group.members}
+            slave_devices = [
+                dev for dev in indigo.devices.iter("self")
+                if dev.address.strip() in group_member_ips and dev.id != coordinator_dev.id
+            ]
 
-            # Identify Indigo devices for all group slaves
-            slave_devices = []
-            group_member_ips = {member.ip_address.strip() for member in devices_in_group}
-
-            for indigo_device in indigo.devices:
-                if indigo_device.address.strip() != coordinator_ip and indigo_device.address.strip() in group_member_ips:
-                    slave_devices.append(indigo_device)
-
-            # Update slaves in the group
+            # Ensure all slave devices have expected state keys
             for slave_dev in slave_devices:
-                slave_dev.updateStateOnServer("GROUP_Coordinator", "false")
-                slave_dev.updateStateOnServer("GROUP_Name", master_group_name)
+                self.safe_initialize_states(slave_dev)
 
-            # Cleanup: Update devices NOT in this group (or now standalone)
-            for indigo_device in indigo.devices:
-                device_ip_clean = indigo_device.address.strip()
-                if device_ip_clean not in group_member_ips and device_ip_clean != coordinator_ip:
-                    # Determine if device is its own coordinator (standalone)
-                    soco_dev = self.soco_by_ip.get(device_ip_clean)
-                    if not soco_dev:
-                        continue
-                    if soco_dev.group.coordinator.ip_address.strip() == device_ip_clean:
-                        indigo_device.updateStateOnServer("GROUP_Coordinator", "true")
-                        indigo_device.updateStateOnServer("GROUP_Name", soco_dev.player_name)
-                        self.safe_debug(f"🔄 Updated standalone device {indigo_device.name} → Coordinator: true, Group Name: {soco_dev.player_name}")
+            # Define all playback-related state keys to copy
+            playback_keys = [
+                "Album", "Artist", "Track", "Source", "state",
+                "CurrentAlbum", "CurrentArtist", "CurrentTrack", "CurrentSource",
+                "CurrentAlbumURI", "CurrentTrackURI", "CurrentTrackArt",
+                "albumArtURL", "Q_Album", "Q_Artist", "Q_Track", "Q_Source"
+            ]
 
-            # Artwork sync for slaves
-            master_artwork_file_path = None
-            artwork_url = coordinator_dev.states.get('ZP_ART', None)
-
-            if artwork_url and not artwork_url.endswith("default.jpg"):
-                for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
+            # Propagate coordinator state values to all slaves
+            for slave_dev in slave_devices:
+                for key in playback_keys:
+                    value = coordinator_dev.states.get(key, "")
                     try:
-                        response = requests.get(artwork_url, stream=True, timeout=10)
-                        self.logger.debug(f"🧪 Artwork fetch attempt {attempt} HTTP status: {response.status_code}")
-                        time.sleep(1.5)
-
-                        if response.status_code == 200:
-                            master_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{coordinator_dev.address}.jpg"
-                            with open(master_artwork_file_path, 'wb') as f:
-                                for chunk in response.iter_content(1024):
-                                    f.write(chunk)
-
-                            if os.path.exists(master_artwork_file_path):
-                                artwork_size = os.path.getsize(master_artwork_file_path)
-                                self.safe_debug(f"🖼️ Artwork saved for master {coordinator_dev.name} ({artwork_size} bytes)")
-                                break
-                            else:
-                                self.logger.warning(f"⚠️ Artwork file not saved properly on attempt {attempt}")
-                        else:
-                            self.logger.warning(f"⚠️ Artwork download failed (status {response.status_code}) on attempt {attempt}")
+                        if value is None:
+                            value = ""
+                        slave_dev.updateStateOnServer(key, value)
                     except Exception as e:
-                        time.sleep(0.5)
-                        self.logger.warning(f"⚠️ Exception during artwork download attempt {attempt}: {e}")
-
-            if not master_artwork_file_path or not os.path.exists(master_artwork_file_path):
-                master_artwork_file_path = DEFAULT_ARTWORK_PATH
-
-            # Push master states to group slaves (as before)
-            for rdev in devices_in_group:
-                if rdev == coordinator:
-                    continue
-
-                indigo_slave_device = None
-                for indigo_device in indigo.devices:
-                    if indigo_device.address.strip() == rdev.ip_address.strip():
-                        indigo_slave_device = indigo_device
-                        break
-
-                if not indigo_slave_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for slave {rdev.player_name} ({rdev.ip_address}), skipping.")
-                    continue
-
-                for state in list(ZoneGroupStates):
-                    value = dev.states.get(state, "")
-
-                    if state == "ZP_SOURCE" and value in ["Sonos", "Sonos - Fallback", "", None]:
-                        continue
-
-                    indigo_slave_device.updateStateOnServer(state, value)
-
-                # Ensure group name is correct even after all updates
-                indigo_slave_device.updateStateOnServer("GROUP_Name", master_group_name)
-
-                try:
-                    slave_artwork_file_path = f"{ARTWORK_FOLDER}sonos_art_{indigo_slave_device.address}.jpg"
-                    shutil.copy(master_artwork_file_path, slave_artwork_file_path)
-                    self.safe_debug(f"🖼️ Copied artwork to slave {indigo_slave_device.name}")
-                except Exception as e:
-                    self.logger.error(f"❌ Failed copying artwork to slave {indigo_slave_device.name}: {e}")
-
-                indigo_slave_device.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{indigo_slave_device.address}.jpg")
-                self.logger.debug(f"🧑‍💻 Slave {indigo_slave_device.name} state sync complete")
+                        self.logger.warning(f"⚠️ Failed to update key '{key}' on slave {slave_dev.name}: {e}")
 
         except Exception as e:
             self.exception_handler(e, True)
@@ -3924,6 +5152,32 @@ class SonosPlugin(object):
 
 
 
+
+
+
+
+    def safe_initialize_states(self, dev):
+        """
+        Ensures that all expected state keys are initialized for the given device.
+        This method mirrors the behavior of deviceStartComm() to prevent 'state key not defined' errors.
+        """
+        try:
+            # Define all expected state keys with default empty values
+            expected_keys = [
+                "Album", "Artist", "Track", "Source", "state",
+                "CurrentAlbum", "CurrentArtist", "CurrentTrack", "CurrentSource",
+                "CurrentAlbumURI", "CurrentTrackURI", "CurrentTrackArt",
+                "albumArtURL", "Q_Album", "Q_Artist", "Q_Track", "Q_Source",
+                "GROUP_Coordinator", "GROUP_Name", "ZP_ART", "ZP_LocalUID", "ZonePlayerUUIDsInGroup"
+            ]
+
+            for key in expected_keys:
+                if key not in dev.states:
+                    dev.updateStateOnServer(key, "")
+                    self.logger.debug(f"Initialized state key '{key}' for device '{dev.name}'.")
+
+        except Exception as e:
+            self.logger.error(f"Error initializing states for device '{dev.name}': {e}")
 
 
 

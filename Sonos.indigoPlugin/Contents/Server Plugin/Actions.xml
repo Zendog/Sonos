@@ -872,8 +872,15 @@
 
 
 
+<MenuAction id="AuditGroupStatesMenu">
+    <Name>Audit Group States (Menu)</Name>
+    <CallbackMethod>menuAuditGroupStates</CallbackMethod>
+</MenuAction>
 
-
+<Action id="AuditGroupStatesAction" uiPath="Audit / Debug" userVisible="true">
+    <Name>Audit Group States (Control Page)</Name>
+    <CallbackMethod>actionAuditGroupStates</CallbackMethod>
+</Action>
 
 
 </Actions>
