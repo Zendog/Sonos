@@ -3514,12 +3514,12 @@ class SonosPlugin(object):
                             self.zone_group_state_cache = copy.deepcopy(parsed_groups)
                             self.logger.warning(f"💾 zone_group_state_cache updated with {len(self.zone_group_state_cache)} group(s)")
 
-                        self.logger.warning("📊 Parsed Zone Group Summary:")
+                        #self.logger.warning("📊 Parsed Zone Group Summary:")
                         for group_id, data in parsed_groups.items():
                             for m in data["members"]:
                                 bonded_flag = " (Bonded)" if m["bonded"] else ""
                                 coord_flag = " (Coordinator)" if m["coordinator"] else ""
-                                self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
+                                #self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
 
                         self.logger.warning("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
                         self.evaluate_and_update_grouped_states()
@@ -3536,7 +3536,7 @@ class SonosPlugin(object):
             sid = getattr(event_obj, "sid", "N/A")
             zone_ip = getattr(event_obj, "zone_ip", None)
 
-            self.logger.warning(f"📥 RAW EVENT RECEIVED — service: {service_type} | sid: {sid}")
+            #self.logger.warning(f"📥 RAW EVENT RECEIVED — service: {service_type} | sid: {sid}")
 
             if not zone_ip and hasattr(event_obj, "soco"):
                 zone_ip = getattr(event_obj.soco, "ip_address", None)
@@ -4412,12 +4412,12 @@ class SonosPlugin(object):
                         "members": members
                     }
 
-            self.logger.warning(f"✅ Parsed {len(group_dict)} group(s) from ZoneGroupState.")
+            #self.logger.warning(f"✅ Parsed {len(group_dict)} group(s) from ZoneGroupState.")
             for gid, group in group_dict.items():
                 for m in group["members"]:
                     bonded = " (Bonded)" if m["bonded"] else ""
                     coordinator = " (Coordinator)" if m["coordinator"] else ""
-                    self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded}{coordinator}")
+                    #self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded}{coordinator}")
 
         except Exception as e:
             self.logger.error(f"❌ Failed to parse ZoneGroupState XML: {e}")
@@ -4473,7 +4473,7 @@ class SonosPlugin(object):
 
         now = time.time()
         if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
-            self.logger.warning("⏱️ Skipping group re-evaluation — too soon since last update.")
+            #self.logger.warning("⏱️ Skipping group re-evaluation — too soon since last update.")
             return
         self._last_group_eval = now
 
