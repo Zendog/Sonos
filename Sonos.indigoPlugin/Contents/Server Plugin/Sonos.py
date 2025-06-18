@@ -3,6 +3,7 @@ import datetime  # ✅ Needed for fallback print timestamp
 import io
 import sys
 import os
+import copy
 import json
 import time
 import html
@@ -914,7 +915,7 @@ class SonosPlugin(object):
                     indigo.server.log("add zone to group: %s" % item)
                     dev_dest = indigo.devices[int(item)]
                     self.SOAPSend (dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-
+                    self.refresh_all_group_states()
 
             elif action_id == "setStandalone":
                 indigo.server.log(f"🔀 Request to remove zone from group: {dev.name}")
@@ -953,6 +954,7 @@ class SonosPlugin(object):
                         f"<CurrentURI>x-rincon-queue:{target_uid}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>"
                     )
 
+                    self.refresh_all_group_states()
                     self.logger.info(f"✅ {dev.name} ungrouped and reassigned queue")
 
                 except Exception as e:
@@ -999,7 +1001,7 @@ class SonosPlugin(object):
                     "SetAVTransportURI",
                     f"<CurrentURI>x-rincon:{target_uid}</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>"
                 )
-
+            self.refresh_all_group_states()
         except Exception as e:
             self.logger.error(f"❌ actionZP_addPlayerToZone failed: {e}")
 
@@ -2066,6 +2068,230 @@ class SonosPlugin(object):
         except Exception as e:
             self.logger.warning(f"⚠️ Could not retrieve model name: {e}")
             return "unknown"
+
+
+    def dump_groups_to_log(self):
+            """
+            Dumps the current zone_group_state_cache to the Indigo log in a formatted table.
+            """
+            if not hasattr(self, "zone_group_state_cache") or not self.zone_group_state_cache:
+                self.logger.warning("🚫 No zone group data available to dump.")
+                return
+
+            self.logger.info("\n📦 Dumping all currently grouped devices to the log...")
+            for group_id, group_data in self.zone_group_state_cache.items():
+                coord_uuid = group_data.get("coordinator")
+                members = group_data.get("members", [])
+
+                display_rows = []
+                device_names_in_group = []
+
+                for member in members:
+                    name = member.get("name", "?")
+                    ip = member.get("ip", "?")
+                    bonded = member.get("bonded", False)
+                    is_coordinator = member.get("coordinator", False)
+                    role = "Master (Coordinator)" if is_coordinator else "Slave"
+
+                    indigo_dev = self.ip_to_indigo_device.get(ip)
+                    indigo_name = indigo_dev.name if indigo_dev else "(unmapped)"
+                    indigo_id = indigo_dev.id if indigo_dev else "-"
+                    grouped_state = indigo_dev.states.get("Grouped", "?") if indigo_dev else "?"
+                    plugin_grouped = "true" if (grouped_state == True or grouped_state == "true") else "false"
+
+                    device_names_in_group.append(name)
+
+                    display_rows.append({
+                        "Device Name": name,
+                        "IP Address": ip,
+                        "Role": role,
+                        "Indigo Device": indigo_name,
+                        "Indigo ID": indigo_id,
+                        "Bonded": str(bonded),
+                        "Grouped": str(grouped_state),
+                        "Plugin State": plugin_grouped
+                    })
+
+                # Format table header and rows
+                col_widths = [30, 20, 25, 30, 10, 8, 8, 10]
+                total_width = sum(col_widths) + len(col_widths) - 1
+
+                self.logger.info("")
+                self.logger.info(f"🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {device_names_in_group}")
+                self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                    "Device Name", "IP Address", "Role", "Indigo Device", "Indigo ID",
+                    "Bonded", "Grouped", "Plugin State"
+                ))
+                self.logger.info("=" * total_width)
+
+                for row in display_rows:
+                    self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                        row["Device Name"],
+                        row["IP Address"],
+                        row["Role"],
+                        row["Indigo Device"],
+                        row["Indigo ID"],
+                        row["Bonded"],
+                        row["Grouped"],
+                        row["Plugin State"]
+                    ))
+
+            # Consolidated plugin-level grouped view
+            self.logger.info("\n🔍 Consolidated Evaluated Grouped Logic Summary (plugin-level view):")
+
+            summary_col_widths = [32, 26, 8, 20, 20]
+            summary_total_width = sum(summary_col_widths)
+            header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+            row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+
+            self.logger.info("")
+            self.logger.info(header_fmt.format(
+                "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
+            ))
+            self.logger.info("=" * summary_total_width)
+            self.logger.info("")
+
+            # Build groups by coordinator name
+            groups_by_coordinator = {}
+
+            for ip, indigo_dev in self.ip_to_indigo_device.items():
+                soco_dev = self.soco_by_ip.get(ip)
+                if not soco_dev or not soco_dev.group:
+                    continue
+                coord_name = soco_dev.group.coordinator.player_name if soco_dev.group.coordinator else "?"
+                groups_by_coordinator.setdefault(coord_name, []).append((soco_dev, indigo_dev))
+
+            # Output block for each group
+            for coordinator_name in sorted(groups_by_coordinator.keys()):
+                self.logger.info(f"🎧 Group: {coordinator_name}")
+                self.logger.info("-" * summary_total_width)
+
+                # Determine the grouped state from the coordinator
+                group_members = groups_by_coordinator[coordinator_name]
+                coord_dev = next((d for s, d in group_members if s == s.group.coordinator), None)
+                coord_grouped_state = coord_dev.states.get("Grouped", "?") if coord_dev else "?"
+
+                for soco_dev, indigo_dev in sorted(group_members, key=lambda tup: tup[1].name.lower()):
+                    is_coord = (soco_dev == soco_dev.group.coordinator)
+                    role = "Master (Coordinator)" if is_coord else "Slave"
+                    bonded = any(b in indigo_dev.name.lower() for b in ["sub"])
+                    group_name = coordinator_name
+
+                    # Show coordinator's grouped state for all members
+                    grouped = coord_grouped_state
+                    emoji_prefix = "🔹" if is_coord else "  "
+                    bonded_display = "🎯 True" if bonded else "False"
+                    grouped_display = (
+                        "✅ true" if grouped == True or grouped == "true" else
+                        "❌ false" if grouped == False or grouped == "false" else
+                        f"❓ {grouped}"
+                    )
+
+                    self.logger.info(row_fmt.format(
+                        emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
+                        role,
+                        bonded_display,
+                        grouped_display,
+                        group_name
+                    ))
+
+                self.logger.info("")  # Spacer between groups
+
+            self.logger.info("")  # Final spacer
+
+
+
+
+
+
+    def refresh_all_group_states(self):
+        """
+        Refresh and evaluate current Sonos zone groups using the SoCo .group property.
+        """
+        self.logger.warning("🔁 Forcing group topology refresh and evaluation using SoCo group objects...")
+
+        groups = {}
+        seen_members = set()
+
+        for ip, soco in self.soco_by_ip.items():
+            try:
+                group = soco.group
+                if not group or not group.coordinator:
+                    continue
+
+                group_id = group.coordinator.uid
+                if group_id not in groups:
+                    groups[group_id] = {
+                        "coordinator": group.coordinator.uid,
+                        "members": [],
+                    }
+
+                for member in group.members:
+                    member_uuid = member.uid
+                    if member_uuid in seen_members:
+                        continue
+                    seen_members.add(member_uuid)
+
+                    zone_name = member.player_name.lower()
+                    if "sub" in zone_name:
+                        self.logger.debug(f"🚫 Skipping bonded sub: {zone_name}")
+                        continue
+
+                    groups[group_id]["members"].append({
+                        "uuid": member_uuid,
+                        "location": member.ip_address,
+                        "zone_name": zone_name,
+                        "name": member.player_name,
+                        "ip": member.ip_address,
+                        "coordinator": member == group.coordinator,
+                        "bonded": "sub" in zone_name  # refine if needed
+                    })
+
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to evaluate group for {ip}: {e}")
+
+        self.zone_group_state_cache = groups
+        self.logger.warning(f"💾 zone_group_state_cache updated with {len(groups)} group(s)")
+        self.evaluate_and_update_grouped_states()
+
+
+
+
+
+
+
+
+    def get_all_zone_groups(self):
+        """Fetch and apply the latest zone group topology across all devices."""
+        self.logger.warning("🔁 Initiating full group topology refresh...")
+
+        updated = False
+        for soco in self.soco_by_ip.values():
+            try:
+                #topology = soco.zoneGroupTopology
+                topology = soco.zoneGroupTopology.to_xml_string()
+                self.zone_group_state_cache = self.parse_zone_group_state(topology)
+                self.logger.debug(f"📦 Zone group state updated from {soco.ip_address}")
+                updated = True
+                break  # Successfully fetched topology from one active player
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not fetch group topology from {soco.ip_address}: {e}")
+
+        if not updated:
+            self.logger.error("❌ Failed to update zone group state from any device")
+            return
+
+        # Re-evaluate all known Indigo devices
+        self.logger.warning("🔍 Re-evaluating all Indigo Sonos devices with updated group state...")
+        for dev in indigo.devices.iter("self"):
+            try:
+                self.evaluate_and_update_grouped_states(dev)
+            except Exception as e:
+                self.logger.error(f"❌ Error re-evaluating group state for {dev.name}: {e}")
+
+        # Optional debug dump
+        if hasattr(self, "dump_groups_to_log"):
+            self.dump_groups_to_log()
 
 
 
@@ -3337,15 +3563,14 @@ class SonosPlugin(object):
                 self.logger.error(f"❌ socoSubscribe() or updateZoneGroupStates() failed for {indigo_device.name}: {e}")
 
 
-            # 🔄 Initiakize zone grouped states (globally)
-            # 🔄 Initialize zone grouped states
             #self.initZones(indigo_device)
             self.initZones(indigo_device, soco_device)
-            # 🔄 Evaluate grouped states (globally)
+            self.logger.info(f"During start up - lets evaluate_and_update current grouped states - yes ????")             
             self.evaluate_and_update_grouped_states()
+           
 
         except Exception as e:
-            self.logger.error(f"❌ Error in deviceStartComm for {indigo_device.name}: {e}")
+            self.logger.error(f"✅ Error in deviceStartComm for {indigo_device.name}: {e}")
 
 
 
@@ -3455,27 +3680,41 @@ class SonosPlugin(object):
 
 
 
-    #######################################################################################################################################
-    ### Event Handler to process lightweight soco state changes (sound related kind of things) and retrieve current dynamic state updates
-    #######################################################################################################################################
-
+#############################################################################################################################################################################################################
+### Event Handler to process player controls and soco state changes and maintain current dynamic state updates
+#############################################################################################################################################################################################################
 
     def soco_event_handler(self, event_obj):
-        import copy
 
+        ## The first try block here can set variables and or log various things that need to be defined or checked ahead of the event processing loop
         try:
+            soco_ip = getattr(getattr(event_obj, "soco", None), "ip_address", "(no soco)")
+            soco_ref = getattr(event_obj, "soco", None)
+            zone_ip = getattr(soco_ref, "ip_address", None)
             #self.logger.warning("📥 Raw Event Object Received:")
             #self.logger.warning(f"   ⤷ service: {getattr(event_obj.service, 'service_type', '?')}")
             #self.logger.warning(f"   ⤷ sid: {getattr(event_obj, 'sid', '?')}")
-            soco_ip = getattr(getattr(event_obj, "soco", None), "ip_address", "(no soco)")
             #self.logger.warning(f"   ⤷ soco.ip: {soco_ip}")
             #self.logger.warning(f"   ⤷ variables: {event_obj.variables}")
+            service_type = getattr(event_obj.service, "service_type", "").lower()
+            sid = getattr(event_obj, "sid", "").lower()
+            zone_ip = getattr(getattr(event_obj, "soco", None), "ip_address", None)
         except Exception as log_err:
             self.logger.error(f"❌ Failed to log raw event object: {log_err}")
 
-        service_type = getattr(event_obj.service, "service_type", "").lower()
-        sid = getattr(event_obj, "sid", "").lower()
-        zone_ip = getattr(getattr(event_obj, "soco", None), "ip_address", None)
+
+
+#        # the following is a dectection and log event only to see if we can isolate
+#        if not zone_ip:
+#            self.logger.info(f"🔎 ZGT event with no source IP — likely a Sonos response to a command or an unsolicted subscription song change, subscription renewal or other Sonos system or app event.")
+#            #return
+#        else:
+#            self.logger.info(f"🔎 New check - ZoneGroupTopology event triggered by {zone_ip}")
+
+
+        ######################################################################################################################################################################################################
+        ### Zone Group Topology (ZGT) processing
+        ######################################################################################################################################################################################################
 
         is_zgt_event = (
             "zonegrouptopology" in service_type or
@@ -3485,7 +3724,9 @@ class SonosPlugin(object):
         )
 
         if is_zgt_event:
-            self.logger.warning(f"🔎 ZoneGroupTopology event triggered by {zone_ip}")
+#            self.logger.info(f"🔎 This is from - (if is_zgt_event) - logic - ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
+#            self.logger.info(f"🧪 9999 zgt event detected entering the event logic now...")
+#            self.logger.info(f"🔎 ZoneGroupTopology event triggered by {zone_ip}")
             zone_state_xml = (
                 event_obj.variables.get("zone_group_state") or
                 event_obj.variables.get("ZoneGroupState") or
@@ -3493,7 +3734,7 @@ class SonosPlugin(object):
             )
 
             if not zone_state_xml:
-                self.logger.warning(f"⚠️ ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
+                self.logger.info(f"🔎 This is from - (if not zone_state_xml) - logic - ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
             else:
                 # Ensure XML is string, not bytes
                 if isinstance(zone_state_xml, bytes):
@@ -3505,23 +3746,34 @@ class SonosPlugin(object):
                         return
 
                 try:
+                    self.logger.info(f"🧪 zgt event was detected entering the phase 2 try event logic now...")
                     parsed_groups = self.parse_zone_group_state(zone_state_xml)
                     if not parsed_groups:
                         self.logger.warning("⚠️ Parsed zone group data was empty.")
                     else:
-                        self.logger.warning(f"🧪 Parsed {len(parsed_groups)} group(s) from XML. Caching now...")
-                        with self.zone_group_state_lock:
-                            self.zone_group_state_cache = copy.deepcopy(parsed_groups)
-                            self.logger.warning(f"💾 zone_group_state_cache updated with {len(self.zone_group_state_cache)} group(s)")
+                        self.logger.warning(f"🧪 Parsed {len(parsed_groups)} group(s) from XML. Evaluating cache...")
 
-                        #self.logger.warning("📊 Parsed Zone Group Summary:")
+                        def _normalized_group_snapshot(group_dict):
+                            return json.dumps(group_dict, sort_keys=True)
+
+                        incoming_snapshot = _normalized_group_snapshot(parsed_groups)
+                        with self.zone_group_state_lock:
+                            current_snapshot = _normalized_group_snapshot(self.zone_group_state_cache)
+
+                            if incoming_snapshot == current_snapshot:
+                                self.logger.warning("⏩ No group topology change detected — skipping re-evaluation.")
+                                return
+
+                            self.zone_group_state_cache = copy.deepcopy(parsed_groups)
+                            self.logger.warning(f"💾 zone_group_state_cache updated with {len(parsed_groups)} group(s)")
+
                         for group_id, data in parsed_groups.items():
                             for m in data["members"]:
                                 bonded_flag = " (Bonded)" if m["bonded"] else ""
                                 coord_flag = " (Coordinator)" if m["coordinator"] else ""
-                                #self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
+                                # self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
 
-                        self.logger.warning("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
+                        self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
                         self.evaluate_and_update_grouped_states()
 
                         self.logger.warning("📣 Propagating updated Grouped states to all devices...")
@@ -3530,6 +3782,8 @@ class SonosPlugin(object):
 
                 except Exception as e:
                     self.logger.error(f"❌ Failed to parse ZoneGroupState XML: {e}")
+#            self.logger.info(f"🧪 zgt event detected EXITING the event logic now...")
+
 
         try:
             service_type = getattr(event_obj.service, "service_type", "UNKNOWN")
@@ -3571,6 +3825,17 @@ class SonosPlugin(object):
             self.safe_debug(f"🧪 Event handler fired! SID={getattr(event_obj, 'sid', 'N/A')} zone_ip={zone_ip} Type={type(event_obj)}")
             self.safe_debug(f"🧑‍💻 Full event variables: {getattr(event_obj, 'variables', {})}")
 
+        ######################################################################################################################################################################################################
+        ### Transport State processing
+        ######################################################################################################################################################################################################
+
+            def safe_call(val):
+                try:
+                    return val() if callable(val) else val
+                except Exception:
+                    return ""
+
+
             if "transport_state" in event_obj.variables:
                 transport_state = event_obj.variables["transport_state"]
                 transport_state_upper = transport_state.upper()
@@ -3584,11 +3849,6 @@ class SonosPlugin(object):
             if not hasattr(self, "last_siriusxm_artist_by_dev"):
                 self.last_siriusxm_artist_by_dev = {}
 
-            def safe_call(val):
-                try:
-                    return val() if callable(val) else val
-                except Exception:
-                    return ""
 
             current_uri = (
                 event_obj.variables.get("current_track_uri") or
@@ -3631,53 +3891,39 @@ class SonosPlugin(object):
                     self.safe_debug(f"🔄 Lightweight update → {k}: {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
-            soco_device = self.getSoCoDeviceByIP(indigo_device.address)
-            if soco_device:
-                self.refresh_group_membership(indigo_device, soco_device)
-                self.logger.debug(f"🔁 Forcing master state save and slave updates for {indigo_device.name}")
-                self.evaluate_and_update_grouped_states()                
-                #self.updateStateOnSlaves(indigo_device)
-            else:
-                self.logger.warning(f"⚠️ Could not refresh group membership: No SoCo device for {indigo_device.name}")
+
+        ######################################################################################################################################################################################################
+        ### Refresh Group Membership - only if there are any_grouped = any
+        ######################################################################################################################################################################################################
 
 
-            if service_type.lower() == "avtransport":
-                if indigo_device:
-                    try:
-                        self.safe_debug(f"🎨 Attempting artwork update for {indigo_device.name} (IP: {indigo_device.address})")
-                        self.update_album_artwork(event_obj=event_obj, dev=indigo_device, zone_ip=indigo_device.address.strip())
-                    except Exception as e:
-                        self.logger.warning(f"⚠️ Failed to update album artwork: {e}")
+            try:
+                any_grouped = any(
+                    str(dev.states.get("Grouped", "")).lower() == "true"
+                    for dev in indigo.devices.iter("self")
+                    if dev.enabled
+                )
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed to evaluate 'Grouped' status across devices: {e}")
+                any_grouped = False
+
+            if any_grouped:
+                soco_device = self.getSoCoDeviceByIP(indigo_device.address)
+                if soco_device:
+                    self.refresh_group_membership(indigo_device, soco_device)
+                    self.logger.info(f"🔁 Active group detected — forcing master/slave state updates for {indigo_device.name}")      
+                    self.evaluate_and_update_grouped_states()
                 else:
-                    self.logger.warning("⚠️ Skipping artwork update — indigo_device could not be resolved for AVTransport event")
+                    self.logger.warning(f"⚠️ Could not refresh group membership: No SoCo device for {indigo_device.name}")
             else:
-                self.safe_debug(f"🎨 Skipping artwork update — event service_type={service_type} (only AVTransport allowed)")
+                self.logger.debug("⏩ No active groups (Grouped=true) detected — skipping group refresh/state sync")
 
-    #   def handle_heavyweight_updates(self, event_obj, indigo_device, dev_id, zone_ip, state_updates):
-    #        state_updates = {}
 
-            def safe_call(val):
-                try:
-                    return val() if callable(val) else val
-                except Exception:
-                    return ""
 
-            # ✅ NEW: Check if this event carries meaningful metadata
-            has_metadata_update = (
-                "current_track_meta_data" in event_obj.variables or
-                "enqueued_transport_uri_meta_data" in event_obj.variables or
-                "av_transport_uri_meta_data" in event_obj.variables
-            )
+        ######################################################################################################################################################################################################
+        ### Customized State Processing for things like SiriusXM, Pandora, Sonos, Apple, Etc.
+        ######################################################################################################################################################################################################
 
-            if not has_metadata_update:
-                self.safe_debug("⚡ Skipping heavyweight updates: no metadata present in this event")
-                #return  # Exit early if no media/metadata updates
-
-            uri_priority = [
-                ("enqueued_transport_uri", event_obj.variables.get("enqueued_transport_uri", "")),
-                ("av_transport_uri", event_obj.variables.get("av_transport_uri", "")),
-                ("current_track_uri", event_obj.variables.get("current_track_uri", ""))
-            ]
 
             # Initialize helpers and flags early
             is_siriusxm = False
@@ -3771,6 +4017,19 @@ class SonosPlugin(object):
                 except Exception as e:
                     self.logger.warning(f"⚠️ Failed to parse Pandora metadata: {e}")
 
+            #################################################################################################
+            ### Is everything here and after a drop through that fires everytime? 
+            #################################################################################################
+
+            #################################################################################################
+            ### Is everything here and after a drop through that fires everytime? 
+            ### this refresh_group_mambership below seems to be the only call to refresh group membership - 
+            ### perhaps we need to wrap this with test logic to only call if group is changed, seems to 
+            ### happen now on every group trigger? This would also remove the extra art save.
+            #################################################################################################
+
+#            self.logger.info("Trapping here what fires after drop through from all other states assesment events")    
+
             # === General metadata ===
             if "current_track_meta_data" in event_obj.variables:
                 meta = event_obj.variables["current_track_meta_data"]
@@ -3814,6 +4073,9 @@ class SonosPlugin(object):
                     self.safe_debug(f"🔄 Heavyweight update → {k}: {v}")
                     indigo_device.updateStateOnServer(key=k, value=v)
 
+
+#### Do I need thois if it is firing from controller? Seems to fire with both if on but neither when off?
+
             # === Artwork block — moved here for coordination after states ===
             try:
                 indigo_device = self.getIndigoDeviceFromEvent(event_obj)
@@ -3823,11 +4085,11 @@ class SonosPlugin(object):
                         dev=indigo_device,
                         zone_ip=indigo_device.address.strip()
                     )
+                    self.logger.info(f"🖼️ Standalone - I am updating artwork here for {zone_ip} — after drop through from all other states assesment events")    
                 else:
                     self.logger.warning("⚠️ Skipping artwork update — Indigo device could not be resolved from event")
             except Exception as e:
                 self.logger.warning(f"⚠️ Failed to update album artwork: {e}")
-
 
 
             # === Coordinator logic ===
@@ -3842,7 +4104,6 @@ class SonosPlugin(object):
                 self.logger.warning("⚠️ Skipping coordinator check — indigo_device is None")
 
 
-
             if is_master:
                 self.updateStateOnSlaves(indigo_device)
                 #self.evaluate_and_update_grouped_states()            
@@ -3851,12 +4112,12 @@ class SonosPlugin(object):
             self.logger.error(f"❌ Error in soco_event_handler: {e}")
 
 
+#################################################################################################
+### End of Event Handler
+#################################################################################################
 
 
 
-    #################################################################################################
-    ### End of New - Heavyweight
-    #################################################################################################
 
 
     def getSoCoDeviceByIP(self, ip_address):
@@ -4065,6 +4326,9 @@ class SonosPlugin(object):
 
     ######################################################################################
     # Utiliies
+
+
+
 
 
 
@@ -4461,22 +4725,11 @@ class SonosPlugin(object):
             return {}
 
 
-
-
-
-
-
-
-
-
-    def evaluate_and_update_grouped_states(self):
-
+    def evaluate_and_update_grouped_states(self, dev=None):
         now = time.time()
         if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
-            #self.logger.warning("⏱️ Skipping group re-evaluation — too soon since last update.")
             return
         self._last_group_eval = now
-
 
         if not self.soco_by_ip:
             self.logger.warning("🚫 SoCo device map is empty — skipping group evaluation.")
@@ -4519,7 +4772,6 @@ class SonosPlugin(object):
                 self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
                 continue
 
-            # Determine grouped status by counting unique non-bonded member names
             non_bonded_members = [
                 m for m in members
                 if not any(b in m.player_name.lower() for b in bonded_names)
@@ -4534,25 +4786,20 @@ class SonosPlugin(object):
                     self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip})")
                     continue
 
+                # If a specific device was passed, skip unrelated ones
+                if dev and dev.id != indigo_device.id:
+                    continue
+
                 expected_grouped = "true" if is_grouped else "false"
                 expected_coord = "true" if member == coordinator else "false"
 
                 grouped_val = indigo_device.states.get("Grouped", "undefined")
                 coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
 
-#                self.logger.info(
-#                    f"🔍 Evaluated: {indigo_device.name} → "
-#                    f"Grouped (was): {grouped_val}, "
-#                    f"GROUP_Coordinator (was): {coord_val}, "
-#                    f"Computed Grouped: {expected_grouped}, Coordinator: {expected_coord}"
-#               )
-
-                # Update Grouped if changed
                 if str(grouped_val).lower() != expected_grouped:
                     self.logger.info(f"🆙 Updating 'Grouped' state for {indigo_device.name} → {expected_grouped}")
                     indigo_device.updateStateOnServer("Grouped", expected_grouped)
 
-                # Update GROUP_Coordinator if changed
                 if str(coord_val).lower() != expected_coord:
                     self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
                     indigo_device.updateStateOnServer("GROUP_Coordinator", expected_coord)
@@ -4761,7 +5008,7 @@ class SonosPlugin(object):
                             image = image.convert("RGB")
                             image.save(master_artwork_path, format="JPEG", quality=75)
                             art_url = f"http://localhost:8888/sonos_art_{coordinator.ip_address}.jpg"
-                            self.logger.info(f"🖼️ Album art saved for {coordinator.player_name}")
+                            self.logger.info(f"🖼️ Coordinator Album art saved for {coordinator.player_name}")
                             break
                     except Exception as e:
                         self.logger.warning(f"⚠️ Failed to fetch album art: {e}")
