@@ -367,7 +367,7 @@ class SonosPlugin(object):
 
     def actionDirect(self, pluginAction, action_id_override=None):
         try:
-            self.logger.warning("🧪 [LOG 0] Entered actionDirect")
+            #self.logger.warning("🧪 [LOG 0] Entered actionDirect")
 
             # Normalize simplified override names into internal action IDs
             action_map = {
@@ -409,10 +409,10 @@ class SonosPlugin(object):
             }
 
             raw_key = action_id_override or pluginAction.pluginTypeId
-            self.logger.warning(f"🧪 [LOG 1] raw_key: {raw_key}")
+            #self.logger.warning(f"🧪 [LOG 1] raw_key: {raw_key}")
             action_key = action_map.get(raw_key, raw_key)
             action_id = action_key
-            self.logger.warning(f"🧪 [LOG 2] action_id resolved to: {action_id}")
+            #self.logger.warning(f"🧪 [LOG 2] action_id resolved to: {action_id}")
 
             # Dispatch handler mapping (global or device-aware)
             dispatch_table = {
@@ -428,11 +428,11 @@ class SonosPlugin(object):
 
 
             device_id = int(pluginAction.deviceId)
-            self.logger.warning(f"🧪 [LOG 3] pluginAction.deviceId: {device_id}")
+            #self.logger.warning(f"🧪 [LOG 3] pluginAction.deviceId: {device_id}")
 
             # === Global Actions (e.g., from Control Pages) ===
             if device_id == 0:
-                self.logger.warning(f"🧪 [LOG 3.5] Global action (deviceId = 0) detected: {action_id}")
+                #self.logger.warning(f"🧪 [LOG 3.5] Global action (deviceId = 0) detected: {action_id}")
 
                 if action_id == "setStandalones":
                     zones = []
@@ -463,7 +463,7 @@ class SonosPlugin(object):
             # === Device-Based Actions ===
             try:
                 dev = indigo.devices[device_id]
-                self.logger.warning(f"🧪 [LOG 4] dev.name: {dev.name}, ID: {dev.id}")
+                #self.logger.warning(f"🧪 [LOG 4] dev.name: {dev.name}, ID: {dev.id}")
             except KeyError:
                 self.logger.error(f"❌ Device ID {device_id} not found in Indigo database")
                 return
@@ -479,10 +479,10 @@ class SonosPlugin(object):
             else:
                 self.logger.debug(f"✅ {dev.name} is the coordinator — using direct control")
 
-            self.logger.warning(f"🧪 [LOG 5] zoneIP resolved to: {zoneIP}")
-            self.logger.warning(f"🧪 [LOG 6] dev.states keys: {list(dev.states.keys())}")
-            self.logger.warning(f"🧪 [LOG 7] dev.pluginProps keys: {list(dev.pluginProps.keys())}")
-            self.logger.warning(f"🧪 [LOG 8] Grouped: {dev.states.get('Grouped', 'MISSING')}, GROUP_Coordinator: {dev.states.get('GROUP_Coordinator', 'MISSING')}")
+            #self.logger.warning(f"🧪 [LOG 5] zoneIP resolved to: {zoneIP}")
+            #self.logger.warning(f"🧪 [LOG 6] dev.states keys: {list(dev.states.keys())}")
+            #self.logger.warning(f"🧪 [LOG 7] dev.pluginProps keys: {list(dev.pluginProps.keys())}")
+            #self.logger.warning(f"🧪 [LOG 8] Grouped: {dev.states.get('Grouped', 'MISSING')}, GROUP_Coordinator: {dev.states.get('GROUP_Coordinator', 'MISSING')}")
  
 
 
@@ -2234,7 +2234,7 @@ class SonosPlugin(object):
 
                     zone_name = member.player_name.lower()
                     if "sub" in zone_name:
-                        self.logger.debug(f"🚫 Skipping bonded sub: {zone_name}")
+                        #self.logger.debug(f"🚫 Skipping bonded sub: {zone_name}")
                         continue
 
                     groups[group_id]["members"].append({
@@ -2252,7 +2252,8 @@ class SonosPlugin(object):
 
         self.zone_group_state_cache = groups
         self.logger.warning(f"💾 zone_group_state_cache updated with {len(groups)} group(s)")
-        self.evaluate_and_update_grouped_states()
+        self.refresh_group_topology_after_plugin_zone_change()
+        #self.evaluate_and_update_grouped_states()
 
 
 
@@ -2285,7 +2286,8 @@ class SonosPlugin(object):
         self.logger.warning("🔍 Re-evaluating all Indigo Sonos devices with updated group state...")
         for dev in indigo.devices.iter("self"):
             try:
-                self.evaluate_and_update_grouped_states(dev)
+                self.refresh_group_topology_after_plugin_zone_change()
+                #self.evaluate_and_update_grouped_states(dev)
             except Exception as e:
                 self.logger.error(f"❌ Error re-evaluating group state for {dev.name}: {e}")
 
@@ -3358,7 +3360,7 @@ class SonosPlugin(object):
 
         # ✅ Use helper to get model name
         model_name = self.get_model_name(soco_device)
-        self.logger.warning(f"🧪 Model name for {indigo_device.name}: {model_name}")
+        self.logger.info(f"🧪 Model name for {indigo_device.name}: {model_name}")
 
         self.soco_subs[indigo_device.id] = {}
         self.soco_by_ip[indigo_device.address] = soco_device
@@ -3566,7 +3568,8 @@ class SonosPlugin(object):
             #self.initZones(indigo_device)
             self.initZones(indigo_device, soco_device)
             self.logger.info(f"During start up - lets evaluate_and_update current grouped states - yes ????")             
-            self.evaluate_and_update_grouped_states()
+            self.refresh_group_topology_after_plugin_zone_change()
+            #self.evaluate_and_update_grouped_states()
            
 
         except Exception as e:
@@ -3751,7 +3754,7 @@ class SonosPlugin(object):
                     if not parsed_groups:
                         self.logger.warning("⚠️ Parsed zone group data was empty.")
                     else:
-                        self.logger.warning(f"🧪 Parsed {len(parsed_groups)} group(s) from XML. Evaluating cache...")
+                        #self.logger.warning(f"🧪 Parsed {len(parsed_groups)} group(s) from XML. Evaluating cache...")
 
                         def _normalized_group_snapshot(group_dict):
                             return json.dumps(group_dict, sort_keys=True)
@@ -3773,10 +3776,11 @@ class SonosPlugin(object):
                                 coord_flag = " (Coordinator)" if m["coordinator"] else ""
                                 # self.logger.warning(f"   → {m['name']} @ {m['ip']}{bonded_flag}{coord_flag}")
 
-                        self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
-                        self.evaluate_and_update_grouped_states()
+                        #self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
+                        self.refresh_group_topology_after_plugin_zone_change()
+                        #self.evaluate_and_update_grouped_states()
 
-                        self.logger.warning("📣 Propagating updated Grouped states to all devices...")
+                        self.logger.info("📣 Propagating updated Grouped states to all devices...")
                         for dev in indigo.devices.iter("self"):
                             self.updateZoneGroupStates(dev)
 
@@ -3912,7 +3916,8 @@ class SonosPlugin(object):
                 if soco_device:
                     self.refresh_group_membership(indigo_device, soco_device)
                     self.logger.info(f"🔁 Active group detected — forcing master/slave state updates for {indigo_device.name}")      
-                    self.evaluate_and_update_grouped_states()
+                    self.refresh_group_topology_after_plugin_zone_change()
+                    #self.evaluate_and_update_grouped_states()
                 else:
                     self.logger.warning(f"⚠️ Could not refresh group membership: No SoCo device for {indigo_device.name}")
             else:
@@ -4085,7 +4090,7 @@ class SonosPlugin(object):
                         dev=indigo_device,
                         zone_ip=indigo_device.address.strip()
                     )
-                    self.logger.info(f"🖼️ Standalone - I am updating artwork here for {zone_ip} — after drop through from all other states assesment events")    
+                    #self.logger.info(f"🖼️ Standalone - I am updating artwork here for {zone_ip} — after drop through from all other states assesment events")    
                 else:
                     self.logger.warning("⚠️ Skipping artwork update — Indigo device could not be resolved from event")
             except Exception as e:
@@ -4485,10 +4490,6 @@ class SonosPlugin(object):
         return None
 
 
-
-
-
-
     def dump_groups_to_log(self):
         """
         Dumps the current zone_group_state_cache to the Indigo log in a formatted table.
@@ -4570,22 +4571,23 @@ class SonosPlugin(object):
         self.logger.info("=" * summary_total_width)
         self.logger.info("")
 
-        # Build groups by coordinator name
+        # Build groups by coordinator name (soco.group)
         groups_by_coordinator = {}
 
         for ip, indigo_dev in self.ip_to_indigo_device.items():
             soco_dev = self.soco_by_ip.get(ip)
             if not soco_dev or not soco_dev.group:
                 continue
-            coord_name = soco_dev.group.coordinator.player_name if soco_dev.group.coordinator else "?"
+            coord = soco_dev.group.coordinator
+            if not coord:
+                continue
+            coord_name = coord.player_name
             groups_by_coordinator.setdefault(coord_name, []).append((soco_dev, indigo_dev))
 
-        # Output block for each group
         for coordinator_name in sorted(groups_by_coordinator.keys()):
             self.logger.info(f"🎧 Group: {coordinator_name}")
             self.logger.info("-" * summary_total_width)
 
-            # Determine the grouped state from the coordinator
             group_members = groups_by_coordinator[coordinator_name]
             coord_dev = next((d for s, d in group_members if s == s.group.coordinator), None)
             coord_grouped_state = coord_dev.states.get("Grouped", "?") if coord_dev else "?"
@@ -4593,16 +4595,15 @@ class SonosPlugin(object):
             for soco_dev, indigo_dev in sorted(group_members, key=lambda tup: tup[1].name.lower()):
                 is_coord = (soco_dev == soco_dev.group.coordinator)
                 role = "Master (Coordinator)" if is_coord else "Slave"
-                bonded = any(b in indigo_dev.name.lower() for b in ["sub"])
+                bonded = any(sub in indigo_dev.name.lower() for sub in ["sub"])
                 group_name = coordinator_name
 
-                # Show coordinator's grouped state for all members
                 grouped = coord_grouped_state
                 emoji_prefix = "🔹" if is_coord else "  "
                 bonded_display = "🎯 True" if bonded else "False"
                 grouped_display = (
-                    "✅ true" if grouped == True or grouped == "true" else
-                    "❌ false" if grouped == False or grouped == "false" else
+                    "✅ true" if str(grouped).lower() == "true" else
+                    "❌ false" if str(grouped).lower() == "false" else
                     f"❓ {grouped}"
                 )
 
@@ -4614,10 +4615,11 @@ class SonosPlugin(object):
                     group_name
                 ))
 
-            self.logger.info("")  # Spacer between groups
+            self.logger.info("")
 
-        self.logger.info("")  # Final spacer
+        self.logger.info("")
 
+        
 
 
 
@@ -4627,7 +4629,7 @@ class SonosPlugin(object):
         import xml.etree.ElementTree as ET
         group_dict = {}
 
-        self.logger.warning("🛠 ENTERED parse_zone_group_state()")
+        #self.logger.warning("🛠 ENTERED parse_zone_group_state()")
 
         # Ensure xml_data is a str (not bytes)
         if isinstance(xml_data, bytes):
@@ -4638,8 +4640,8 @@ class SonosPlugin(object):
                 self.logger.error(f"❌ Failed to decode XML data: {decode_err}")
                 return {}
 
-        self.logger.warning(f"📨 Incoming XML data length: {len(xml_data)}")
-        self.logger.warning(f"🔎 First 200 chars: {xml_data[:200]}")
+        #self.logger.warning(f"📨 Incoming XML data length: {len(xml_data)}")
+        #self.logger.warning(f"🔎 First 200 chars: {xml_data[:200]}")
 
         try:
             root = ET.fromstring(xml_data)
@@ -4651,7 +4653,7 @@ class SonosPlugin(object):
                 for member in zg.findall("ZoneGroupMember"):
                     zone_name = member.get("ZoneName", "")
                     if "sub" in zone_name.lower():
-                        self.logger.warning(f"🚫 Skipping bonded sub: {zone_name}")
+                        #self.logger.warning(f"🚫 Skipping bonded sub: {zone_name}")
                         continue  # skip Sub devices
 
                     uuid = member.get("UUID")
@@ -4725,6 +4727,16 @@ class SonosPlugin(object):
             return {}
 
 
+
+    def rebuild_ip_to_device_map(self):
+        #self.logger.warning("🔁 Rebuilding IP-to-Indigo device map...")
+        self.ip_to_indigo_device = {}
+        for dev in indigo.devices.iter("self"):
+            ip = dev.pluginProps.get("address", "").strip()
+            if ip:
+                self.ip_to_indigo_device[ip] = dev
+
+
     def evaluate_and_update_grouped_states(self, dev=None):
         now = time.time()
         if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
@@ -4742,11 +4754,13 @@ class SonosPlugin(object):
         bonded_names = ["sub"]
         seen_groups = set()
 
-        self.logger.warning("🔄 Evaluating current group states for all Sonos devices...")
+        self.logger.info("🔄 Evaluating current group states for all Sonos devices...")
 
         for group_uid, group_data in self.zone_group_state_cache.items():
             coordinator_entry = group_data.get("coordinator")
             member_entries = group_data.get("members", [])
+
+            self.logger.info(f"🧪 Group ID: {group_uid} | Coordinator: {coordinator_entry} | Members: {len(member_entries)}")
 
             if group_uid in seen_groups:
                 continue
@@ -4756,7 +4770,7 @@ class SonosPlugin(object):
             coordinator = self.get_soco_by_uuid(coordinator_uuid)
 
             if not coordinator:
-                self.logger.warning(f"⚠️ Could not resolve SoCo coordinator for UUID: {coordinator_entry}")
+                self.logger.warning(f"⚠️ Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
                 continue
 
             members = []
@@ -4786,7 +4800,6 @@ class SonosPlugin(object):
                     self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip})")
                     continue
 
-                # If a specific device was passed, skip unrelated ones
                 if dev and dev.id != indigo_device.id:
                     continue
 
@@ -4803,6 +4816,99 @@ class SonosPlugin(object):
                 if str(coord_val).lower() != expected_coord:
                     self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
                     indigo_device.updateStateOnServer("GROUP_Coordinator", expected_coord)
+
+                    
+
+    def refresh_group_topology_after_plugin_zone_change(self):
+        #self.logger.warning("🔁 Manually refreshing group topology after plugin-initiated zone change...")
+
+        try:
+            import http.client as httplib
+            import xml.etree.ElementTree as ET
+
+            def get_zone_group_state_from_player(ip):
+                try:
+                    conn = httplib.HTTPConnection(ip, 1400, timeout=5)
+                    conn.request("GET", "/status/zp")
+                    response = conn.getresponse()
+                    if response.status == 200:
+                        return response.read()
+                    else:
+                        self.logger.warning(f"⚠️ Failed HTTP ZGT fetch from {ip}: status {response.status}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Exception fetching ZGT from {ip}: {e}")
+                return None
+
+            def parse_zone_group_state(xml_data):
+                groups = {}
+                try:
+                    if isinstance(xml_data, bytes):
+                        xml_data = xml_data.decode("utf-8", errors="ignore")
+                    elif not isinstance(xml_data, str):
+                        xml_data = str(xml_data)
+
+                    xml_data = xml_data.strip()
+                    if not xml_data.startswith("<"):
+                        raise ValueError("XML does not start with expected '<'")
+
+                    #self.logger.warning("🛠 ENTERED parse_zone_group_state()")
+                    #self.logger.warning(f"📨 Incoming XML data length: {len(xml_data)}")
+                    #self.logger.warning(f"🔎 First 200 chars: {xml_data[:200]}")
+
+                    root = ET.fromstring(xml_data)
+                    for group in root.findall(".//ZoneGroup"):
+                        group_id = group.get("ID")
+                        coordinator_uuid = group.get("Coordinator")
+                        members = []
+
+                        for member in group.findall("ZoneGroupMember"):
+                            zone_name = member.get("ZoneName", "").strip().lower()
+                            uuid = member.get("UUID", "").strip()
+                            location = member.get("Location", "").strip()
+
+                            if zone_name == "sub":
+                                #self.logger.warning(f"🚫 Skipping bonded sub: {zone_name}")
+                                continue
+
+                            members.append({
+                                "uuid": uuid,
+                                "location": location,
+                                "zone_name": zone_name,
+                            })
+
+                        groups[group_id] = {
+                            "coordinator": coordinator_uuid,
+                            "members": members,
+                        }
+
+                    #self.logger.warning(f"🧪 Parsed {len(groups)} group(s) from XML.")
+                except Exception as e:
+                    self.logger.error(f"❌ XML parse error in zone group topology: {e}")
+                return groups
+
+            #for ip in self.soco_by_ip.keys():
+            for ip in list(self.soco_by_ip.keys()):                
+                raw_xml = get_zone_group_state_from_player(ip)
+                if raw_xml:
+                    parsed = parse_zone_group_state(raw_xml)
+                    if parsed:
+                        self.zone_group_state_cache = parsed
+                        self.logger.info(f"💾 zone_group_state_cache updated with {len(parsed)} group(s)")
+                        break
+
+            # 🔄 Rebuild critical mappings before group state evaluation
+            if hasattr(self, "rebuild_ip_to_device_map"):
+                self.rebuild_ip_to_device_map()
+            if hasattr(self, "rebuild_uuid_maps_from_soco"):
+                self.rebuild_uuid_maps_from_soco()
+
+            #self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
+            self.evaluate_and_update_grouped_states()
+
+        except Exception as e:
+            self.logger.error(f"❌ Exception in refresh_group_topology_after_plugin_zone_change: {e}")
+
+
 
 
 
@@ -5008,7 +5114,7 @@ class SonosPlugin(object):
                             image = image.convert("RGB")
                             image.save(master_artwork_path, format="JPEG", quality=75)
                             art_url = f"http://localhost:8888/sonos_art_{coordinator.ip_address}.jpg"
-                            self.logger.info(f"🖼️ Coordinator Album art saved for {coordinator.player_name}")
+                            #self.logger.info(f"🖼️ Coordinator Album art saved for {coordinator.player_name}")
                             break
                     except Exception as e:
                         self.logger.warning(f"⚠️ Failed to fetch album art: {e}")
