@@ -336,6 +336,11 @@ class SonosPlugin(object):
         self.soco_by_ip = {}
         self.soco_devices = {}
         self.ip_to_indigo_device = {}
+        self.ip_to_soco_device = {}  # Maps IP -> SoCo object
+
+        self.uuid_to_indigo_device = {}  # ✅ Required for dump_groups_to_log
+
+        self.group_name_by_device_id = {}
 
         # Hardcoded fallback test entries
         self.siriusxm_guid_map.update({
@@ -357,6 +362,33 @@ class SonosPlugin(object):
         self.device_zone_ips = {}
 
         self.parsed_zone_group_state_by_ip = {}
+
+
+        self.device_zone_ips = {}
+        self.parsed_zone_group_state_by_ip = {}
+
+
+        self.soco_by_dev = {}
+
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            uuid = dev.states.get("uuid", None)
+            if not uuid:
+                continue
+            soco = self.soco_devices_by_uuid.get(uuid)
+            if soco:
+                self.soco_by_dev[dev.id] = soco
+
+
+
+
+        # ✅ Rebuild uuid_to_indigo_device mapping
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            soco = self.soco_devices.get(dev.address)
+            if soco:
+                try:
+                    self.uuid_to_indigo_device[soco.uid] = dev
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not map UUID for device '{dev.name}': {e}")
 
     ### End of Initialization
 
@@ -431,10 +463,16 @@ class SonosPlugin(object):
             #self.logger.warning(f"🧪 [LOG 3] pluginAction.deviceId: {device_id}")
 
             # === Global Actions (e.g., from Control Pages) ===
+
+
+
+
+            
             if device_id == 0:
                 #self.logger.warning(f"🧪 [LOG 3.5] Global action (deviceId = 0) detected: {action_id}")
 
                 if action_id == "setStandalones":
+                    self.logger.warning(f"I am going to set standalones from a state where they are grouped")                    
                     zones = []
                     for x in range(1, 13):
                         ivar = f'zp{x}'
@@ -452,6 +490,11 @@ class SonosPlugin(object):
                             self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport",
                                           "SetAVTransportURI",
                                           f"<CurrentURI>x-rincon-queue:{dev.states['ZP_LocalUID']}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+#DT_Test
+                            self.logger.warning(f"DT_Test")
+                            self.refresh_group_topology_after_plugin_zone_change()
+                            self.refresh_all_group_states()            
+                            self.evaluate_and_update_grouped_states()                            
                         except Exception as e:
                             self.logger.error(f"❌ Failed to ungroup device {item}: {e}")
                     return
@@ -916,6 +959,9 @@ class SonosPlugin(object):
                     dev_dest = indigo.devices[int(item)]
                     self.SOAPSend (dev_dest.pluginProps["address"], "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon:"+str(dev.states['ZP_LocalUID'])+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                     self.refresh_all_group_states()
+
+                self.refresh_all_group_states()
+                self.logger.info(f"✅ tried refresh at end of add ???? ")
 
             elif action_id == "setStandalone":
                 indigo.server.log(f"🔀 Request to remove zone from group: {dev.name}")
@@ -2070,38 +2116,152 @@ class SonosPlugin(object):
             return "unknown"
 
 
-    def dump_groups_to_log(self):
-            """
-            Dumps the current zone_group_state_cache to the Indigo log in a formatted table.
-            """
-            if not hasattr(self, "zone_group_state_cache") or not self.zone_group_state_cache:
-                self.logger.warning("🚫 No zone group data available to dump.")
-                return
 
-            self.logger.info("\n📦 Dumping all currently grouped devices to the log...")
-            for group_id, group_data in self.zone_group_state_cache.items():
-                coord_uuid = group_data.get("coordinator")
-                members = group_data.get("members", [])
+    def reinitialize_and_rebuild_group_state(self):
+        """
+        Rebuild group state using logic similar to initial deviceStartComm load.
+        This avoids plugin state drift after dynamic grouping/ungrouping.
+        """
+        self.logger.warning("🔄 Forcing reinitialization of group topology and plugin group states...")
 
-                display_rows = []
-                device_names_in_group = []
+        try:
+            from soco import SoCo
 
-                for member in members:
-                    name = member.get("name", "?")
-                    ip = member.get("ip", "?")
-                    bonded = member.get("bonded", False)
-                    is_coordinator = member.get("coordinator", False)
+            # ✅ Ensure all required plugin dictionaries are initialized
+            if not hasattr(self, "zone_group_state_cache"):
+                self.zone_group_state_cache = {}
+            if not hasattr(self, "device_by_uuid"):
+                self.device_by_uuid = {}
+            if not hasattr(self, "uuid_to_soco"):
+                self.uuid_to_soco = {}
+            if not hasattr(self, "soco_devices"):
+                self.soco_devices = {}
+            if not hasattr(self, "parsed_zone_group_state_by_ip"):
+                self.parsed_zone_group_state_by_ip = {}
+            if not hasattr(self, "soco_by_ip"):
+                self.soco_by_ip = {}
+            if not hasattr(self, "ip_to_indigo_device"):
+                self.ip_to_indigo_device = {}
+
+            # 🔄 Clear all cached group state and mapping structures
+            self.zone_group_state_cache.clear()
+            self.device_by_uuid.clear()
+            self.uuid_to_soco.clear()
+            self.soco_devices.clear()
+            self.parsed_zone_group_state_by_ip.clear()
+            self.soco_by_ip.clear()
+            self.ip_to_indigo_device.clear()
+
+            # 🔁 Reinitialize SoCo and Indigo device bindings
+            for dev in indigo.devices.iter("self"):
+                ip = dev.address
+                if not ip:
+                    self.logger.warning(f"⚠️ Device {dev.name} has no IP — skipping")
+                    continue
+
+                try:
+                    soco_device = SoCo(ip)
+                    self.soco_by_ip[ip] = soco_device
+                    self.ip_to_indigo_device[ip] = dev
+                    self.logger.info(f"✅ Reinitialized SoCo for {dev.name} ({ip})")
+
+                    # UID mapping
+                    zp_uid = soco_device.uid
+                    self.device_by_uuid[zp_uid] = dev
+                    self.uuid_to_soco[zp_uid] = soco_device
+                    self.soco_devices[zp_uid] = soco_device
+                    self.logger.info(f"🔁 Bound {dev.name} to UUID {zp_uid}")
+
+                except Exception as e:
+                    self.logger.warning(f"❌ Failed to initialize SoCo for {dev.name} at {ip}: {e}")
+                    continue
+
+            # ⏬ Refresh zone group topology and populate group cache
+            self.refresh_group_topology_after_plugin_zone_change()
+            self.refresh_all_group_states()            
+            self.evaluate_and_update_grouped_states()
+
+            # 🔍 Confirm cache population
+            if not self.zone_group_state_cache:
+                self.logger.warning("🚫 zone_group_state_cache is still empty — group topology may not have been fetched.")
+            else:
+                self.logger.info(f"📊 zone_group_state_cache populated with {len(self.zone_group_state_cache)} group(s).")
+
+            # ✅ Re-evaluate plugin logical grouped state
+
+
+
+
+            self.logger.warning("✅ Reinitialization and group state rebuild complete.")
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to reinitialize group state: {e}")
+
+
+
+
+    ############################################################################################
+    ### Dump Groups To Log by master coordinator
+    ############################################################################################
+
+
+    def dump_by_master(self):
+        """
+        Dumps the ZoneGroupState parsed group data as seen from the Sonos perspective (zone_group_state_cache).
+        """
+        if not hasattr(self, "zone_group_state_cache") or not self.zone_group_state_cache:
+            self.logger.warning("🚫 No zone group data available to dump.")
+            return
+
+        self.logger.info("\n📦 Dumping Sonos / SOCO view of grouped devices to the log...")
+        devices_in_parsed_groups = set()
+
+        for group_id, group_data in self.zone_group_state_cache.items():
+            if not isinstance(group_data, dict):
+                self.logger.warning(f"⚠️ Skipping invalid group_data for '{group_id}' (expected dict, got {type(group_data)})")
+                continue
+
+            members = group_data.get("members", [])
+            member_rows = []
+            device_names_in_group = []
+
+            for member in members:
+                try:
+                    if isinstance(member, dict):
+                        name = member.get("name", "?")
+                        ip = member.get("ip", "?")
+                        bonded = member.get("bonded", False)
+                        is_coordinator = member.get("coordinator", False)
+                    elif isinstance(member, int):
+                        dev = indigo.devices.get(member)
+                        if dev:
+                            name = dev.name
+                            ip = dev.address if dev.address else "?"
+                            bonded = "sub" in dev.name.lower()
+                            is_coordinator = dev.states.get("GROUP_Coordinator", "false") == "true"
+                        else:
+                            self.logger.warning(f"⚠️ Could not resolve injected device ID {member}")
+                            continue
+                    else:
+                        self.logger.warning(f"⚠️ Skipping invalid member in group '{group_id}': {member}")
+                        continue
+
                     role = "Master (Coordinator)" if is_coordinator else "Slave"
+                    cached_entry = self.ip_to_indigo_device.get(ip)
+                    indigo_dev = indigo.devices.get(cached_entry) if isinstance(cached_entry, int) else cached_entry
 
-                    indigo_dev = self.ip_to_indigo_device.get(ip)
                     indigo_name = indigo_dev.name if indigo_dev else "(unmapped)"
                     indigo_id = indigo_dev.id if indigo_dev else "-"
                     grouped_state = indigo_dev.states.get("Grouped", "?") if indigo_dev else "?"
-                    plugin_grouped = "true" if (grouped_state == True or grouped_state == "true") else "false"
+                    plugin_grouped = "true" if grouped_state in (True, "true") else "false"
 
                     device_names_in_group.append(name)
+                    if indigo_dev:
+                        devices_in_parsed_groups.add(indigo_dev.id)
 
-                    display_rows.append({
+                    self.logger.debug(f"🔍 Adding member row: name={name}, ip={ip}, role={role}, indigo={indigo_name}, bonded={bonded}, grouped={grouped_state}, plugin_state={plugin_grouped}")
+
+                    member_rows.append({
                         "Device Name": name,
                         "IP Address": ip,
                         "Role": role,
@@ -2112,94 +2272,204 @@ class SonosPlugin(object):
                         "Plugin State": plugin_grouped
                     })
 
-                # Format table header and rows
-                col_widths = [30, 20, 25, 30, 10, 8, 8, 10]
-                total_width = sum(col_widths) + len(col_widths) - 1
-
-                self.logger.info("")
-                self.logger.info(f"🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {device_names_in_group}")
-                self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
-                    "Device Name", "IP Address", "Role", "Indigo Device", "Indigo ID",
-                    "Bonded", "Grouped", "Plugin State"
-                ))
-                self.logger.info("=" * total_width)
-
-                for row in display_rows:
-                    self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
-                        row["Device Name"],
-                        row["IP Address"],
-                        row["Role"],
-                        row["Indigo Device"],
-                        row["Indigo ID"],
-                        row["Bonded"],
-                        row["Grouped"],
-                        row["Plugin State"]
-                    ))
-
-            # Consolidated plugin-level grouped view
-            self.logger.info("\n🔍 Consolidated Evaluated Grouped Logic Summary (plugin-level view):")
-
-            summary_col_widths = [32, 26, 8, 20, 20]
-            summary_total_width = sum(summary_col_widths)
-            header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
-            row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
-
-            self.logger.info("")
-            self.logger.info(header_fmt.format(
-                "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
-            ))
-            self.logger.info("=" * summary_total_width)
-            self.logger.info("")
-
-            # Build groups by coordinator name
-            groups_by_coordinator = {}
-
-            for ip, indigo_dev in self.ip_to_indigo_device.items():
-                soco_dev = self.soco_by_ip.get(ip)
-                if not soco_dev or not soco_dev.group:
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Skipping invalid member in group '{group_id}': {e}")
                     continue
-                coord_name = soco_dev.group.coordinator.player_name if soco_dev.group.coordinator else "?"
-                groups_by_coordinator.setdefault(coord_name, []).append((soco_dev, indigo_dev))
 
-            # Output block for each group
-            for coordinator_name in sorted(groups_by_coordinator.keys()):
-                self.logger.info(f"🎧 Group: {coordinator_name}")
-                self.logger.info("-" * summary_total_width)
+            col_widths = [30, 20, 25, 30, 10, 8, 8, 10]
+            total_width = sum(col_widths) + len(col_widths) - 1
 
-                # Determine the grouped state from the coordinator
-                group_members = groups_by_coordinator[coordinator_name]
-                coord_dev = next((d for s, d in group_members if s == s.group.coordinator), None)
-                coord_grouped_state = coord_dev.states.get("Grouped", "?") if coord_dev else "?"
+            self.logger.info("")
+            self.logger.info(f"🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {device_names_in_group}")
+            self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                "Device Name", "IP Address", "Role", "Indigo Device", "Indigo ID",
+                "Bonded", "Grouped", "Plugin State"
+            ))
+            self.logger.info("=" * total_width)
 
-                for soco_dev, indigo_dev in sorted(group_members, key=lambda tup: tup[1].name.lower()):
-                    is_coord = (soco_dev == soco_dev.group.coordinator)
-                    role = "Master (Coordinator)" if is_coord else "Slave"
-                    bonded = any(b in indigo_dev.name.lower() for b in ["sub"])
-                    group_name = coordinator_name
-
-                    # Show coordinator's grouped state for all members
-                    grouped = coord_grouped_state
-                    emoji_prefix = "🔹" if is_coord else "  "
-                    bonded_display = "🎯 True" if bonded else "False"
-                    grouped_display = (
-                        "✅ true" if grouped == True or grouped == "true" else
-                        "❌ false" if grouped == False or grouped == "false" else
-                        f"❓ {grouped}"
-                    )
-
-                    self.logger.info(row_fmt.format(
-                        emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
-                        role,
-                        bonded_display,
-                        grouped_display,
-                        group_name
-                    ))
-
-                self.logger.info("")  # Spacer between groups
-
-            self.logger.info("")  # Final spacer
+            for row in member_rows:
+                self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
+                    row["Device Name"], row["IP Address"], row["Role"],
+                    row["Indigo Device"], row["Indigo ID"], row["Bonded"],
+                    row["Grouped"], row["Plugin State"]
+                ))
 
 
+    ############################################################################################
+    ### Dump Groups To Log by logical group
+    ############################################################################################
+
+
+    def dump_by_logical_group(self):
+        """
+        Dumps the plugin-evaluated logical group state summary.
+        """
+        if not hasattr(self, "evaluated_group_members_by_coordinator") or not self.evaluated_group_members_by_coordinator:
+            self.logger.warning("🚫 No plugin-evaluated group info available.")
+            return
+
+        self.logger.info("\n🔍 Evaluated Grouped Logic Summary (plugin-level view):")
+        summary_col_widths = [32, 26, 8, 20, 20]
+        summary_total_width = sum(summary_col_widths)
+        header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+        row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+
+        self.logger.info("")
+        self.logger.info(header_fmt.format(
+            "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
+        ))
+        self.logger.info("=" * summary_total_width)
+        self.logger.info("")
+
+        for coordinator_name, dev_list in sorted(self.evaluated_group_members_by_coordinator.items()):
+            self.logger.info(f"🎧 Group: {coordinator_name}")
+            self.logger.info("-" * summary_total_width)
+
+            for indigo_dev in sorted(dev_list, key=lambda d: d.name.lower()):
+                is_coord = indigo_dev.states.get("GROUP_Coordinator", "false") == "true"
+                role = "Master (Coordinator)" if is_coord else "Slave"
+                bonded = "sub" in indigo_dev.name.lower()
+                grouped = indigo_dev.states.get("Grouped", "?")
+                group_name = indigo_dev.states.get("GROUP_Name") or self.group_name_by_device_id.get(indigo_dev.id, "?")
+
+                emoji_prefix = "🔹" if is_coord else "  "
+                bonded_display = "🎯 True" if bonded else "False"
+                grouped_display = (
+                    "✅ true" if grouped in (True, "true") else
+                    "❌ false" if grouped in (False, "false") else
+                    f"❓ {grouped}"
+                )
+
+                self.logger.info(row_fmt.format(
+                    emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
+                    role,
+                    bonded_display,
+                    grouped_display,
+                    group_name
+                ))
+
+            self.logger.info("")
+
+
+    ############################################################################################
+    ### Dump Groups To Log by inventory
+    ############################################################################################
+
+
+
+    def dump_by_inventory(self):
+        """
+        Dumps a full audit of all Sonos Indigo devices including grouping, coordinator, bonded status,
+        and plugin-evaluated group coordinator.
+        """
+        self.logger.info("\n📋 Full Indigo Device Audit Across All Indigo Registered Sonos Devices:")
+
+        # Updated columns with Indigo ID and Group Coord
+        audit_cols = [32, 15, 10, 12, 8, 14, 10, 10, 10, 32]
+        audit_total_width = sum(audit_cols)
+        audit_fmt = "{:<32} {:<15} {:<10} {:<12} {:<8} {:<14} {:<10} {:<10} {:<10} {:<32}"
+
+        self.logger.info("")
+        self.logger.info(audit_fmt.format(
+            "Device Name", "IP Address", "Grouped", "Coordinator", "Bonded",
+            "Group", "XML", "Evaluated", "Indigo ID", "Group Coord"
+        ))
+        self.logger.info("=" * audit_total_width)
+
+        # Devices seen in XML-parsed group data
+        devices_in_parsed_groups = set()
+        if hasattr(self, "zone_group_state_cache"):
+            for group in self.zone_group_state_cache.values():
+                for member in group.get("members", []):
+                    if isinstance(member, dict):
+                        ip = member.get("ip")
+                        dev = self.ip_to_indigo_device.get(ip)
+                        if isinstance(dev, indigo.Device):
+                            devices_in_parsed_groups.add(dev.id)
+                        elif isinstance(dev, int):
+                            devices_in_parsed_groups.add(dev)
+
+        # Devices in plugin-evaluated groups
+        devices_in_evaluated = set()
+        coord_by_device_id = {}
+        if hasattr(self, "evaluated_group_members_by_coordinator"):
+            for devs in self.evaluated_group_members_by_coordinator.values():
+                coordinator = None
+                for dev in devs:
+                    if dev.states.get("GROUP_Coordinator", "false") == "true":
+                        coordinator = dev.name
+                        break
+                for dev in devs:
+                    devices_in_evaluated.add(dev.id)
+                    coord_by_device_id[dev.id] = coordinator or "(unknown)"
+
+        # Iterate over all Indigo Sonos devices
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            name = dev.name
+            ip = dev.address if hasattr(dev, "address") else dev.states.get("ip", "?")
+            grouped = dev.states.get("Grouped", "?")
+
+            # 🟢 Use live SoCo state to determine coordinator
+            soco = self.ip_to_soco_device.get(ip)
+            if soco:
+                try:
+                    coordinator = "True" if soco.is_coordinator else "False"
+                except Exception as e:
+                    self.logger.debug(f"Coordinator check failed for {dev.name} ({ip}): {e}")
+                    coordinator = "?"
+            else:
+                self.logger.debug(f"No SoCo object found for {dev.name} ({ip})")
+                coordinator = "?"
+
+            group_name = dev.states.get("GROUP_Name", "?")
+            bonded = "sub" in name.lower() or "surround" in name.lower() or "left" in name.lower() or "right" in name.lower()
+            in_xml = "Yes" if dev.id in devices_in_parsed_groups else "No"
+            in_eval = "Yes" if dev.id in devices_in_evaluated else "No"
+            group_coord = coord_by_device_id.get(dev.id, "-")
+
+            self.logger.info(audit_fmt.format(
+                name, ip, str(grouped), coordinator,
+                "Yes" if bonded else "No", group_name, in_xml, in_eval,
+                str(dev.id), group_coord
+            ))
+
+        self.logger.info("")
+
+
+
+
+ 
+    ############################################################################################
+    ### Dump Groups To Log - All three
+    ############################################################################################
+    def dump_groups_to_log(self):
+        """
+        Wrapper method to dump full Sonos group state using all perspectives:
+        1. dump_by_master()        — Sonos-derived ZoneGroupState from XML
+        2. dump_by_logical_group() — Plugin-evaluated group logic
+        3. dump_by_inventory()     — Full inventory audit of all Sonos Indigo devices
+        """
+        self.logger.info("🗂️ Starting full group state dump (Sonos + Plugin view)...")
+
+        full_separator = "─" * 179
+
+        self.logger.info("\n" + full_separator + "\n")
+        self.dump_by_master()
+
+        self.logger.info("\n" + full_separator + "\n")
+        self.dump_by_logical_group()
+
+        self.logger.info("\n" + full_separator + "\n")
+        self.dump_by_inventory()
+        self.logger.info("\n" + full_separator + "\n")
+
+        self.logger.info("✅ Group state dump complete.")
+
+
+
+    ############################################################################################
+    ### End - Dump Groups To Log
+    ############################################################################################
 
 
 
@@ -2208,6 +2478,7 @@ class SonosPlugin(object):
         """
         Refresh and evaluate current Sonos zone groups using the SoCo .group property.
         """
+        self.logger.warning("🔁 Entering Refresh_all_group_states")
         self.logger.warning("🔁 Forcing group topology refresh and evaluation using SoCo group objects...")
 
         groups = {}
@@ -2253,6 +2524,7 @@ class SonosPlugin(object):
         self.zone_group_state_cache = groups
         self.logger.warning(f"💾 zone_group_state_cache updated with {len(groups)} group(s)")
         self.refresh_group_topology_after_plugin_zone_change()
+        self.logger.warning("🔁 Exiting Refresh_all_group_states")        
         #self.evaluate_and_update_grouped_states()
 
 
@@ -3122,11 +3394,8 @@ class SonosPlugin(object):
     import threading
     import os
 
-
     def startup(self):
         self.logger.info("🔌 Sonos Plugin Starting Up...")
-
-
 
         # Default image path in case artwork is missing from the stream
         #DEFAULT_ARTWORK_PATH = '/Library/Application Support/Perceptive Automation/images/Sonos/default_artwork copy.jpg'
@@ -3135,9 +3404,8 @@ class SonosPlugin(object):
         ARTWORK_FOLDER = "/Library/Application Support/Perceptive Automation/images/Sonos/"
         os.makedirs(ARTWORK_FOLDER, exist_ok=True)
 
-
         # Cleanup old art before starting the server to reduce storage size and keep things tidy
-        self.cleanup_old_artwork()        
+        self.cleanup_old_artwork()
         self.logger.info(f"🖼️ Updated artwork 5")
 
         # Function to start the HTTP server and serve images
@@ -3174,9 +3442,6 @@ class SonosPlugin(object):
         # Start the HTTP server
         start_http_server()
 
-
-
-
         # 📥 Continue normal Sonos initialization
         try:
             self.sorted_siriusxm_guids = sorted(self.siriusxm_guid_map.keys())
@@ -3202,26 +3467,34 @@ class SonosPlugin(object):
 
             self.logger.info("🕒 Deferring SiriusXM test playback for 'Office' until runConcurrentThread()")
 
-
-
             self.logger.info("🔧 Starting up Sonos Plugin...")
             self.build_ip_to_device_map()
-
-
 
             self.logger.warning("🔎 Performing post-startup audit of Sonos device group states...")
 
             for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                self.initialize_custom_states(dev)
+
+            for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                # ✅ Ensure required states are initialized for each device
+                if "Grouped" not in dev.states:
+                    dev.updateStateOnServer("Grouped", False)
+                if "GROUP_Name" not in dev.states:
+                    dev.updateStateOnServer("GROUP_Name", "")
+                if "GROUP_Coordinator" not in dev.states:
+                    dev.updateStateOnServer("GROUP_Coordinator", "")
+
                 group_coordinator = dev.states.get("GROUP_Coordinator", "n/a")
+                #self.trace_me()
                 group_name = dev.states.get("GROUP_Name", "n/a")
                 Grouped = dev.states.get("GROUP_Grouped", "n/a")
-
+#DT Try this for startup initial view?
+                self.evaluate_and_update_grouped_states()
                 self.logger.info(f"📊 Device '{dev.name}': Coordinator={group_coordinator}, Group='{group_name}', Grouped={Grouped}")
-
-
 
         except Exception as sonos_startup_error:
             self.logger.error(f"❌ Error during Sonos startup: {sonos_startup_error}")
+
 
 
 
@@ -3466,6 +3739,16 @@ class SonosPlugin(object):
                 self.soco_by_ip = {}
             if not hasattr(self, "ip_to_indigo_device"):
                 self.ip_to_indigo_device = {}
+            if not hasattr(self, "uuid_to_indigo_device"):
+                self.uuid_to_indigo_device = {}
+
+            # ✅ Ensure essential states exist before proceeding
+            if "Grouped" not in indigo_device.states:
+                indigo_device.updateStateOnServer("Grouped", False)
+            if "GROUP_Name" not in indigo_device.states:
+                indigo_device.updateStateOnServer("GROUP_Name", "")
+            if "GROUP_Coordinator" not in indigo_device.states:
+                indigo_device.updateStateOnServer("GROUP_Coordinator", "")
 
             # 🖼️ Preload ZP_ART with default placeholder if missing
             if not indigo_device.states.get("ZP_ART"):
@@ -3540,6 +3823,15 @@ class SonosPlugin(object):
             except Exception as e:
                 self.logger.warning(f"⚠️ Failed to set ZP_LocalUID for {indigo_device.name}: {e}")
 
+            # 🧠 ✅ Patch: ensure UUID maps back to Indigo device
+            try:
+                zp_uid = soco_device.uid
+                if zp_uid:
+                    self.logger.warning(f"🔁 Mapping UUID {zp_uid} to Indigo device: {indigo_device.name}")
+                    self.uuid_to_indigo_device[zp_uid] = indigo_device
+            except Exception as e:
+                self.logger.error(f"❌ Failed to bind UUID to Indigo device in deviceStartComm: {e}")
+
             # 🧪 Log model name
             model_name = self.get_model_name(soco_device)
             self.logger.warning(f"🧪 Retrieved model_name for {indigo_device.name}: {model_name}")
@@ -3564,16 +3856,26 @@ class SonosPlugin(object):
             except Exception as e:
                 self.logger.error(f"❌ socoSubscribe() or updateZoneGroupStates() failed for {indigo_device.name}: {e}")
 
-
             #self.initZones(indigo_device)
             self.initZones(indigo_device, soco_device)
             self.logger.info(f"During start up - lets evaluate_and_update current grouped states - yes ????")             
             self.refresh_group_topology_after_plugin_zone_change()
             #self.evaluate_and_update_grouped_states()
-           
+
+
+            for dev in indigo.devices.iter("self"):
+                ip = dev.address
+                if ip:
+                    try:
+                        soco = SoCo(ip)
+                        self.ip_to_soco_device[ip] = soco
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize SoCo for {ip}: {e}")
+
 
         except Exception as e:
             self.logger.error(f"✅ Error in deviceStartComm for {indigo_device.name}: {e}")
+
 
 
 
@@ -4413,6 +4715,7 @@ class SonosPlugin(object):
             group_members = group.members
 
             group_id = group.uid
+            #self.trace_me()               
             group_name = coordinator.player_name or "Unknown Group"
             member_uuids = [member.uid for member in group_members]
 
@@ -4448,6 +4751,7 @@ class SonosPlugin(object):
                 new_grouped_state = "true" if is_grouped else "false"
 
                 # Update Indigo states
+                #self.trace_me()
                 indigo_device.updateStateOnServer("ZP_ZoneName", member_name)
                 indigo_device.updateStateOnServer("ZoneGroupID", group_id)
                 indigo_device.updateStateOnServer("ZoneGroupName", group_name)
@@ -4488,138 +4792,6 @@ class SonosPlugin(object):
                 self.logger.warning(f"⚠️ Could not retrieve UID from SoCo at {ip}: {e}")
         self.logger.warning(f"🔍 No SoCo found for UUID {uuid}")
         return None
-
-
-    def dump_groups_to_log(self):
-        """
-        Dumps the current zone_group_state_cache to the Indigo log in a formatted table.
-        """
-        if not hasattr(self, "zone_group_state_cache") or not self.zone_group_state_cache:
-            self.logger.warning("🚫 No zone group data available to dump.")
-            return
-
-        self.logger.info("\n📦 Dumping all currently grouped devices to the log...")
-        for group_id, group_data in self.zone_group_state_cache.items():
-            coord_uuid = group_data.get("coordinator")
-            members = group_data.get("members", [])
-
-            display_rows = []
-            device_names_in_group = []
-
-            for member in members:
-                name = member.get("name", "?")
-                ip = member.get("ip", "?")
-                bonded = member.get("bonded", False)
-                is_coordinator = member.get("coordinator", False)
-                role = "Master (Coordinator)" if is_coordinator else "Slave"
-
-                indigo_dev = self.ip_to_indigo_device.get(ip)
-                indigo_name = indigo_dev.name if indigo_dev else "(unmapped)"
-                indigo_id = indigo_dev.id if indigo_dev else "-"
-                grouped_state = indigo_dev.states.get("Grouped", "?") if indigo_dev else "?"
-                plugin_grouped = "true" if (grouped_state == True or grouped_state == "true") else "false"
-
-                device_names_in_group.append(name)
-
-                display_rows.append({
-                    "Device Name": name,
-                    "IP Address": ip,
-                    "Role": role,
-                    "Indigo Device": indigo_name,
-                    "Indigo ID": indigo_id,
-                    "Bonded": str(bonded),
-                    "Grouped": str(grouped_state),
-                    "Plugin State": plugin_grouped
-                })
-
-            # Format table header and rows
-            col_widths = [30, 20, 25, 30, 10, 8, 8, 10]
-            total_width = sum(col_widths) + len(col_widths) - 1
-
-            self.logger.info("")
-            self.logger.info(f"🧑‍💻 Devices in group (ZonePlayerUUIDsInGroup): {device_names_in_group}")
-            self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
-                "Device Name", "IP Address", "Role", "Indigo Device", "Indigo ID",
-                "Bonded", "Grouped", "Plugin State"
-            ))
-            self.logger.info("=" * total_width)
-
-            for row in display_rows:
-                self.logger.info("{:<30} {:<20} {:<25} {:<30} {:<10} {:<8} {:<8} {:<10}".format(
-                    row["Device Name"],
-                    row["IP Address"],
-                    row["Role"],
-                    row["Indigo Device"],
-                    row["Indigo ID"],
-                    row["Bonded"],
-                    row["Grouped"],
-                    row["Plugin State"]
-                ))
-
-        # Consolidated plugin-level grouped view
-        self.logger.info("\n🔍 Consolidated Evaluated Grouped Logic Summary (plugin-level view):")
-
-        summary_col_widths = [32, 26, 8, 20, 20]
-        summary_total_width = sum(summary_col_widths)
-        header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
-        row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
-
-        self.logger.info("")
-        self.logger.info(header_fmt.format(
-            "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
-        ))
-        self.logger.info("=" * summary_total_width)
-        self.logger.info("")
-
-        # Build groups by coordinator name (soco.group)
-        groups_by_coordinator = {}
-
-        for ip, indigo_dev in self.ip_to_indigo_device.items():
-            soco_dev = self.soco_by_ip.get(ip)
-            if not soco_dev or not soco_dev.group:
-                continue
-            coord = soco_dev.group.coordinator
-            if not coord:
-                continue
-            coord_name = coord.player_name
-            groups_by_coordinator.setdefault(coord_name, []).append((soco_dev, indigo_dev))
-
-        for coordinator_name in sorted(groups_by_coordinator.keys()):
-            self.logger.info(f"🎧 Group: {coordinator_name}")
-            self.logger.info("-" * summary_total_width)
-
-            group_members = groups_by_coordinator[coordinator_name]
-            coord_dev = next((d for s, d in group_members if s == s.group.coordinator), None)
-            coord_grouped_state = coord_dev.states.get("Grouped", "?") if coord_dev else "?"
-
-            for soco_dev, indigo_dev in sorted(group_members, key=lambda tup: tup[1].name.lower()):
-                is_coord = (soco_dev == soco_dev.group.coordinator)
-                role = "Master (Coordinator)" if is_coord else "Slave"
-                bonded = any(sub in indigo_dev.name.lower() for sub in ["sub"])
-                group_name = coordinator_name
-
-                grouped = coord_grouped_state
-                emoji_prefix = "🔹" if is_coord else "  "
-                bonded_display = "🎯 True" if bonded else "False"
-                grouped_display = (
-                    "✅ true" if str(grouped).lower() == "true" else
-                    "❌ false" if str(grouped).lower() == "false" else
-                    f"❓ {grouped}"
-                )
-
-                self.logger.info(row_fmt.format(
-                    emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
-                    role,
-                    bonded_display,
-                    grouped_display,
-                    group_name
-                ))
-
-            self.logger.info("")
-
-        self.logger.info("")
-
-        
 
 
 
@@ -4737,24 +4909,69 @@ class SonosPlugin(object):
                 self.ip_to_indigo_device[ip] = dev
 
 
+    def initialize_custom_states(self, dev):
+        if dev is None:
+            self.logger.warning("🚫 initialize_custom_states called with None device!")
+            return
+
+        required_keys = [
+            "Grouped",
+            "GROUP_Coordinator",
+            "GROUP_Name",
+            "ZonePlayerUUIDsInGroup",
+            "ZP_LocalUID",
+        ]
+
+        created_keys = []
+
+        for key in required_keys:
+            if key not in dev.states:
+                self.logger.warning(f"🔧 Initializing missing state '{key}' on device: {dev.name}")
+                dev.updateStateOnServer(key, "")
+                created_keys.append(key)
+            else:
+                self.logger.debug(f"✅ State key '{key}' already present on device: {dev.name}")
+
+        if created_keys:
+            self.logger.info(f"🛠 Initialized missing states on {dev.name}: {', '.join(created_keys)}")
+
+
+
+
+
+#################################################################################################
+### Evaluate_and_update_grouped_states
+#################################################################################################
+
+
     def evaluate_and_update_grouped_states(self, dev=None):
         now = time.time()
         if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
             return
         self._last_group_eval = now
 
-        if not self.soco_by_ip:
-            self.logger.warning("🚫 SoCo device map is empty — skipping group evaluation.")
-            return
-
-        if not self.zone_group_state_cache:
-            self.logger.warning("🚫 zone_group_state_cache is empty — no group info available.")
-            return
+        # Initialize required custom states
+        if dev:
+            if dev is not None:
+                self.logger.debug(f"⚙️ Evaluating group state for device: {dev.name}")
+                self.initialize_custom_states(dev)
+            else:
+                self.logger.warning("🚫 Received 'None' for dev argument — skipping initialize_custom_states()")
+        else:
+            self.logger.debug("⚙️ Evaluating group state for all Sonos devices...")
+            for d in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                if d is not None:
+                    self.initialize_custom_states(d)
+                else:
+                    self.logger.warning("🚫 Encountered None in device list — skipping.")
 
         bonded_names = ["sub"]
         seen_groups = set()
 
         self.logger.info("🔄 Evaluating current group states for all Sonos devices...")
+
+        # 🧠 Reset evaluated group tracking cache
+        self.evaluated_group_members_by_coordinator = {}
 
         for group_uid, group_data in self.zone_group_state_cache.items():
             coordinator_entry = group_data.get("coordinator")
@@ -4770,7 +4987,7 @@ class SonosPlugin(object):
             coordinator = self.get_soco_by_uuid(coordinator_uuid)
 
             if not coordinator:
-                self.logger.warning(f"⚠️ Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
+                self.logger.warning(f"⚠️ 1st Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
                 continue
 
             members = []
@@ -4786,21 +5003,35 @@ class SonosPlugin(object):
                 self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
                 continue
 
+            # 🔍 Evaluate non-bonded members
             non_bonded_members = [
                 m for m in members
                 if not any(b in m.player_name.lower() for b in bonded_names)
             ]
             unique_names = set(m.player_name.lower() for m in non_bonded_members)
+
+            # ✅ Determine grouped status — TRUE only if more than one *non-bonded* member
             is_grouped = len(unique_names) > 1
+
+            if not is_grouped:
+                self.logger.info(f"🧩 Not grouped: {coordinator.player_name} — fewer than 2 unique non-bonded members")
+
+            group_name = coordinator.player_name if is_grouped else members[0].player_name
+
+            # 🧠 Initialize tracking for this group
+            if group_name not in self.evaluated_group_members_by_coordinator:
+                self.logger.debug(f"📦 Initializing group entry for '{group_name}' in evaluated_group_members_by_coordinator")
+                self.evaluated_group_members_by_coordinator[group_name] = []
 
             for member in members:
                 member_ip = member.ip_address.strip()
                 indigo_device = self.ip_to_indigo_device.get(member_ip)
                 if not indigo_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip})")
+                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
                     continue
 
                 if dev and dev.id != indigo_device.id:
+                    self.logger.debug(f"⏭ Skipping {indigo_device.name} due to dev filter (looking for ID {dev.id})")
                     continue
 
                 expected_grouped = "true" if is_grouped else "false"
@@ -4808,14 +5039,504 @@ class SonosPlugin(object):
 
                 grouped_val = indigo_device.states.get("Grouped", "undefined")
                 coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
+                name_val = indigo_device.states.get("GROUP_Name", "")
 
+                # Update plugin-evaluated Grouped flag
                 if str(grouped_val).lower() != expected_grouped:
                     self.logger.info(f"🆙 Updating 'Grouped' state for {indigo_device.name} → {expected_grouped}")
-                    indigo_device.updateStateOnServer("Grouped", expected_grouped)
+                    self.updateStateOnServer(indigo_device, "Grouped", expected_grouped)
 
+                # Update plugin-evaluated coordinator flag
                 if str(coord_val).lower() != expected_coord:
                     self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
-                    indigo_device.updateStateOnServer("GROUP_Coordinator", expected_coord)
+                    self.updateStateOnServer(indigo_device, "GROUP_Coordinator", expected_coord)
+
+                # Explicit Group_Name update using indigo_device, not dev
+                old_group_name = indigo_device.states.get("GROUP_Name", "Unavailable")
+                if group_name != old_group_name:
+                    caller = inspect.stack()[1].function
+                    self.logger.warning(f"🧭 TRACE: Group_Name has changed — invoked from: {caller} — will write new value: {group_name}")
+                    try:
+                        indigo_device.updateStateOnServer("GROUP_Name", group_name)
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to write GROUP_Name='{group_name}' to {indigo_device.name}: {e}")
+
+                # Fallback update if not already handled
+                if "GROUP_Name" not in indigo_device.states:
+                    self.logger.error(f"❌ Cannot update GROUP_Name for {indigo_device.name} — state key not defined!")
+                elif group_name and group_name != name_val:
+                    self.logger.info(f"🧩 Updating 'GROUP_Name' for {indigo_device.name} → '{group_name}' (previous: {name_val})")
+                    self.updateStateOnServer(indigo_device, "GROUP_Name", group_name)
+
+                # ✅ Add to plugin-evaluated group tracking dict
+                self.logger.debug(f"✅ Adding {indigo_device.name} to evaluated group '{group_name}'")
+                self.evaluated_group_members_by_coordinator[group_name].append(indigo_device)
+
+        # ✅ Consolidated bonded device injection to ensure visibility in dump_groups_to_log()
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            if not dev or "GROUP_Name" not in dev.states:
+                continue
+
+            group_name = dev.states.get("GROUP_Name")
+            if (
+                not group_name
+                or group_name == "Unavailable"
+                or group_name.startswith("RINCON")
+            ):
+                continue
+
+            dev_id = dev.id
+            dev_name_lower = dev.name.lower()
+
+            # Identify bonded devices by name patterns
+            is_bonded = any(x in dev_name_lower for x in ("left", "right", "sub", "surround"))
+            if not is_bonded:
+                continue
+
+            # ✅ Ensure evaluated_group_members_by_coordinator[group_name] exists
+            if group_name not in self.evaluated_group_members_by_coordinator:
+                self.logger.warning(f"🧰 1st Creating missing evaluated_group_members_by_coordinator['{group_name}'] for bonded injection")
+                self.evaluated_group_members_by_coordinator[group_name] = []
+
+            # 🧠 Prevent duplicates in evaluated group member list
+            if all(d.id != dev_id for d in self.evaluated_group_members_by_coordinator[group_name]):
+                self.logger.warning(f"➕ 1st Injecting bonded device '{dev.name}' into evaluated group '{group_name}' (fallback)")
+                self.evaluated_group_members_by_coordinator[group_name].append(dev)
+
+            # ✅ Ensure zone_group_state_cache[group_name]['members'] exists
+            if group_name not in self.zone_group_state_cache:
+                self.logger.warning(f"🧰 2nd Creating missing zone_group_state_cache['{group_name}'] for bonded injection")
+                self.zone_group_state_cache[group_name] = {"members": []}
+
+            if dev_id not in self.zone_group_state_cache[group_name]["members"]:
+                self.logger.warning(
+                    f"➕ 2nd Injecting bonded device '{dev.name}' (ID {dev_id}) into zone_group_state_cache['{group_name}']['members'] for logging"
+                )
+                self.zone_group_state_cache[group_name]["members"].append(dev_id)
+
+        # 🎯 Post-pass to align bonded Sub grouped flag with its coordinator
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            if not dev or "sub" not in dev.name.lower():
+                continue
+
+            sub_group = dev.states.get("GROUP_Name", "")
+            if not sub_group or sub_group == "Unavailable":
+                continue
+
+            # Attempt to find coordinator for this sub's group
+            coordinator = None
+            for member in self.evaluated_group_members_by_coordinator.get(sub_group, []):
+                if member.states.get("GROUP_Coordinator", "false") == "true":
+                    coordinator = member
+                    break
+
+            if not coordinator:
+                self.logger.warning(f"⚠️ Could not find coordinator for Sub device '{dev.name}' in group '{sub_group}'")
+                continue
+
+            coord_grouped = coordinator.states.get("Grouped", "false")
+            sub_grouped = dev.states.get("Grouped", "false")
+
+            if sub_grouped != coord_grouped:
+                self.logger.info(f"🔁 Syncing Sub '{dev.name}' Grouped flag → {coord_grouped} (match coordinator '{coordinator.name}')")
+                self.updateStateOnServer(dev, "Grouped", coord_grouped)
+
+        # ✅ 🔄 Final fix: post-pass to reassign group names and flags for bonded devices missing or showing raw RINCON names
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            if not dev:
+                continue
+
+            name_lower = dev.name.lower()
+            if not any(x in name_lower for x in ("left", "right", "sub", "surround")):
+                continue
+
+            group_name = dev.states.get("GROUP_Name", "")
+            if not group_name or group_name.startswith("RINCON") or group_name == "Unavailable":
+                # Try to infer from evaluated groups
+                for eval_group, members in self.evaluated_group_members_by_coordinator.items():
+                    for m in members:
+                        if m.id == dev.id:
+                            group_name = eval_group
+                            break
+                    if group_name != "" and not group_name.startswith("RINCON"):
+                        break
+
+                if not group_name or group_name.startswith("RINCON"):
+                    #self.logger.warning(f"🔍 Could not infer clean group name for bonded device '{dev.name}' — skipping post-fix")
+                    continue
+
+                self.logger.info(f"🛠 Rewriting invalid or missing GROUP_Name for bonded '{dev.name}' → '{group_name}'")
+                self.updateStateOnServer(dev, "GROUP_Name", group_name)
+
+            # Align grouped flag with group coordinator
+            coordinator = None
+            for m in self.evaluated_group_members_by_coordinator.get(group_name, []):
+                if m.states.get("GROUP_Coordinator", "false") == "true":
+                    coordinator = m
+                    break
+
+            if not coordinator:
+                self.logger.warning(f"⚠️ Could not resolve coordinator for bonded '{dev.name}' in group '{group_name}'")
+                continue
+
+            coord_grouped = coordinator.states.get("Grouped", "false")
+            dev_grouped = dev.states.get("Grouped", "false")
+            if dev_grouped != coord_grouped:
+                self.logger.info(f"🔁 Syncing bonded '{dev.name}' Grouped flag → {coord_grouped} (match coordinator '{coordinator.name}')")
+                self.updateStateOnServer(dev, "Grouped", coord_grouped)
+
+            if dev.states.get("GROUP_Coordinator", "true") == "true":
+                #self.logger.info(f"🔄 Setting bonded '{dev.name}' as non-coordinator")
+                self.updateStateOnServer(dev, "GROUP_Coordinator", "false")
+
+
+
+
+
+
+
+
+
+
+
+
+    def old_2_evaluate_and_update_grouped_states(self, dev=None):
+        now = time.time()
+        if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
+            return
+        self._last_group_eval = now
+
+        # Initialize required custom states
+        if dev:
+            if dev is not None:
+                self.logger.debug(f"⚙️ Evaluating group state for device: {dev.name}")
+                self.initialize_custom_states(dev)
+            else:
+                self.logger.warning("🚫 Received 'None' for dev argument — skipping initialize_custom_states()")
+        else:
+            self.logger.debug("⚙️ Evaluating group state for all Sonos devices...")
+            for d in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                if d is not None:
+                    self.initialize_custom_states(d)
+                else:
+                    self.logger.warning("🚫 Encountered None in device list — skipping.")
+
+        bonded_names = ["sub"]
+        seen_groups = set()
+
+        self.logger.info("🔄 Evaluating current group states for all Sonos devices...")
+
+        # 🧠 Reset evaluated group tracking cache
+        self.evaluated_group_members_by_coordinator = {}
+
+        for group_uid, group_data in self.zone_group_state_cache.items():
+            coordinator_entry = group_data.get("coordinator")
+            member_entries = group_data.get("members", [])
+
+            self.logger.info(f"🧪 Group ID: {group_uid} | Coordinator: {coordinator_entry} | Members: {len(member_entries)}")
+
+            if group_uid in seen_groups:
+                continue
+            seen_groups.add(group_uid)
+
+            coordinator_uuid = coordinator_entry.get("uuid") if isinstance(coordinator_entry, dict) else coordinator_entry
+            coordinator = self.get_soco_by_uuid(coordinator_uuid)
+
+            if not coordinator:
+                self.logger.warning(f"⚠️ 2nd Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
+                continue
+
+            members = []
+            for entry in member_entries:
+                member_uuid = entry.get("uuid") if isinstance(entry, dict) else entry
+                soco_dev = self.get_soco_by_uuid(member_uuid)
+                if soco_dev:
+                    members.append(soco_dev)
+                else:
+                    self.logger.warning(f"⚠️ Could not resolve SoCo device for UUID: {entry}")
+
+            if not members:
+                self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
+                continue
+
+            # 🔍 Evaluate non-bonded members
+            non_bonded_members = [
+                m for m in members
+                if not any(b in m.player_name.lower() for b in bonded_names)
+            ]
+            unique_names = set(m.player_name.lower() for m in non_bonded_members)
+
+            # ✅ Determine grouped status — TRUE only if more than one *non-bonded* member
+            is_grouped = len(unique_names) > 1
+
+            if not is_grouped:
+                self.logger.info(f"🧩 Not grouped: {coordinator.player_name} — fewer than 2 unique non-bonded members")
+
+            group_name = coordinator.player_name if is_grouped else members[0].player_name
+
+            # 🧠 Initialize tracking for this group
+            if group_name not in self.evaluated_group_members_by_coordinator:
+                self.logger.debug(f"📦 Initializing group entry for '{group_name}' in evaluated_group_members_by_coordinator")
+                self.evaluated_group_members_by_coordinator[group_name] = []
+
+            for member in members:
+                member_ip = member.ip_address.strip()
+                indigo_device = self.ip_to_indigo_device.get(member_ip)
+                if not indigo_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
+                    continue
+
+                if dev and dev.id != indigo_device.id:
+                    self.logger.debug(f"⏭ Skipping {indigo_device.name} due to dev filter (looking for ID {dev.id})")
+                    continue
+
+                expected_grouped = "true" if is_grouped else "false"
+                expected_coord = "true" if member == coordinator else "false"
+
+                grouped_val = indigo_device.states.get("Grouped", "undefined")
+                coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
+                name_val = indigo_device.states.get("GROUP_Name", "")
+
+                # Update plugin-evaluated Grouped flag
+                if str(grouped_val).lower() != expected_grouped:
+                    self.logger.info(f"🆙 Updating 'Grouped' state for {indigo_device.name} → {expected_grouped}")
+                    self.updateStateOnServer(indigo_device, "Grouped", expected_grouped)
+
+                # Update plugin-evaluated coordinator flag
+                if str(coord_val).lower() != expected_coord:
+                    self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
+                    self.updateStateOnServer(indigo_device, "GROUP_Coordinator", expected_coord)
+
+                # Explicit Group_Name update using indigo_device, not dev
+                old_group_name = indigo_device.states.get("GROUP_Name", "Unavailable")
+                if group_name != old_group_name:
+                    caller = inspect.stack()[1].function
+                    self.logger.warning(f"🧭 TRACE: Group_Name has changed — invoked from: {caller} — will write new value: {group_name}")
+                    try:
+                        indigo_device.updateStateOnServer("GROUP_Name", group_name)
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to write GROUP_Name='{group_name}' to {indigo_device.name}: {e}")
+
+                # Fallback update if not already handled
+                if "GROUP_Name" not in indigo_device.states:
+                    self.logger.error(f"❌ Cannot update GROUP_Name for {indigo_device.name} — state key not defined!")
+                elif group_name and group_name != name_val:
+                    self.logger.info(f"🧩 Updating 'GROUP_Name' for {indigo_device.name} → '{group_name}' (previous: {name_val})")
+                    self.updateStateOnServer(indigo_device, "GROUP_Name", group_name)
+
+                # ✅ Add to plugin-evaluated group tracking dict
+                self.logger.debug(f"✅ Adding {indigo_device.name} to evaluated group '{group_name}'")
+                self.evaluated_group_members_by_coordinator[group_name].append(indigo_device)
+
+        # ✅ Consolidated bonded device injection to ensure visibility in dump_groups_to_log()
+
+        # ✅ Consolidated bonded device injection to ensure visibility in dump_groups_to_log()
+        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+            if not dev or "GROUP_Name" not in dev.states:
+                continue
+
+            group_name = dev.states.get("GROUP_Name")
+            if (
+                not group_name
+                or group_name == "Unavailable"
+                or group_name.startswith("RINCON")
+            ):
+                continue
+
+            dev_id = dev.id
+            dev_name_lower = dev.name.lower()
+
+            # Identify bonded devices by name patterns
+            is_bonded = any(x in dev_name_lower for x in ("left", "right", "sub", "surround"))
+            if not is_bonded:
+                continue
+
+            # ✅ Ensure evaluated_group_members_by_coordinator[group_name] exists
+            if group_name not in self.evaluated_group_members_by_coordinator:
+                self.logger.warning(f"🧰 3rd Creating missing evaluated_group_members_by_coordinator['{group_name}'] for bonded injection")
+                self.evaluated_group_members_by_coordinator[group_name] = []
+
+            # 🧠 Prevent duplicates in evaluated group member list
+            if all(d.id != dev_id for d in self.evaluated_group_members_by_coordinator[group_name]):
+                self.logger.warning(f"➕ 3rd Injecting bonded device '{dev.name}' into evaluated group '{group_name}' (fallback)")
+                self.evaluated_group_members_by_coordinator[group_name].append(dev)
+
+            # ✅ Ensure zone_group_state_cache[group_name]['members'] exists
+            if group_name not in self.zone_group_state_cache:
+                self.logger.warning(f"🧰 4th Creating missing zone_group_state_cache['{group_name}'] for bonded injection")
+                self.zone_group_state_cache[group_name] = {"members": []}
+
+            if dev_id not in self.zone_group_state_cache[group_name]["members"]:
+                self.logger.warning(
+                    f"➕ 4th Injecting bonded device '{dev.name}' (ID {dev_id}) into zone_group_state_cache['{group_name}']['members'] for logging"
+                )
+                self.zone_group_state_cache[group_name]["members"].append(dev_id)
+
+            # 🎯 Post-pass to align bonded Sub grouped flag with its coordinator
+            for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                if not dev or "sub" not in dev.name.lower():
+                    continue
+
+                sub_group = dev.states.get("GROUP_Name", "")
+                if not sub_group or sub_group == "Unavailable":
+                    continue
+
+                # Attempt to find coordinator for this sub's group
+                coordinator = None
+                for member in self.evaluated_group_members_by_coordinator.get(sub_group, []):
+                    if member.states.get("GROUP_Coordinator", "false") == "true":
+                        coordinator = member
+                        break
+
+                if not coordinator:
+                    self.logger.warning(f"⚠️ Could not find coordinator for Sub device '{dev.name}' in group '{sub_group}'")
+                    continue
+
+                coord_grouped = coordinator.states.get("Grouped", "false")
+                sub_grouped = dev.states.get("Grouped", "false")
+
+                if sub_grouped != coord_grouped:
+                    self.logger.info(f"🔁 Syncing Sub '{dev.name}' Grouped flag → {coord_grouped} (match coordinator '{coordinator.name}')")
+                    self.updateStateOnServer(dev, "Grouped", coord_grouped)
+
+
+
+#################################################################################################
+### End - Evaluate_and_update_grouped_states
+#################################################################################################
+
+
+
+    def saved_patio_working_evaluate_and_update_grouped_states(self, dev=None):
+        now = time.time()
+        if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
+            return
+        self._last_group_eval = now
+
+        # Initialize required custom states
+        if dev:
+            if dev is not None:
+                self.logger.debug(f"⚙️ Evaluating group state for device: {dev.name}")
+                self.initialize_custom_states(dev)
+            else:
+                self.logger.warning("🚫 Received 'None' for dev argument — skipping initialize_custom_states()")
+        else:
+            self.logger.debug("⚙️ Evaluating group state for all Sonos devices...")
+            for d in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+                if d is not None:
+                    self.initialize_custom_states(d)
+                else:
+                    self.logger.warning("🚫 Encountered None in device list — skipping.")
+
+        bonded_names = ["sub"]
+        seen_groups = set()
+
+        self.logger.info("🔄 Evaluating current group states for all Sonos devices...")
+
+        # 🧠 Reset evaluated group tracking cache
+        self.evaluated_group_members_by_coordinator = {}
+
+        for group_uid, group_data in self.zone_group_state_cache.items():
+            coordinator_entry = group_data.get("coordinator")
+            member_entries = group_data.get("members", [])
+
+            self.logger.info(f"🧪 Group ID: {group_uid} | Coordinator: {coordinator_entry} | Members: {len(member_entries)}")
+
+            if group_uid in seen_groups:
+                continue
+            seen_groups.add(group_uid)
+
+            coordinator_uuid = coordinator_entry.get("uuid") if isinstance(coordinator_entry, dict) else coordinator_entry
+            coordinator = self.get_soco_by_uuid(coordinator_uuid)
+
+            if not coordinator:
+                self.logger.warning(f"⚠️ 3rd Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
+                continue
+
+            members = []
+            for entry in member_entries:
+                member_uuid = entry.get("uuid") if isinstance(entry, dict) else entry
+                soco_dev = self.get_soco_by_uuid(member_uuid)
+                if soco_dev:
+                    members.append(soco_dev)
+                else:
+                    self.logger.warning(f"⚠️ Could not resolve SoCo device for UUID: {entry}")
+
+            if not members:
+                self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
+                continue
+
+            # 🔍 Evaluate non-bonded members
+            non_bonded_members = [
+                m for m in members
+                if not any(b in m.player_name.lower() for b in bonded_names)
+            ]
+            unique_names = set(m.player_name.lower() for m in non_bonded_members)
+
+            # ✅ Determine grouped status — TRUE only if more than one *non-bonded* member
+            is_grouped = len(unique_names) > 1
+
+            if not is_grouped:
+                self.logger.info(f"🧩 Not grouped: {coordinator.player_name} — fewer than 2 unique non-bonded members")
+
+            group_name = coordinator.player_name if is_grouped else members[0].player_name
+
+            # 🧠 Initialize tracking for this group
+            if group_name not in self.evaluated_group_members_by_coordinator:
+                self.logger.debug(f"📦 Initializing group entry for '{group_name}' in evaluated_group_members_by_coordinator")
+                self.evaluated_group_members_by_coordinator[group_name] = []
+
+            for member in members:
+                member_ip = member.ip_address.strip()
+                indigo_device = self.ip_to_indigo_device.get(member_ip)
+                if not indigo_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
+                    continue
+
+                if dev and dev.id != indigo_device.id:
+                    self.logger.debug(f"⏭ Skipping {indigo_device.name} due to dev filter (looking for ID {dev.id})")
+                    continue
+
+                expected_grouped = "true" if is_grouped else "false"
+                expected_coord = "true" if member == coordinator else "false"
+
+                grouped_val = indigo_device.states.get("Grouped", "undefined")
+                coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
+                name_val = indigo_device.states.get("GROUP_Name", "")
+
+                # Update plugin-evaluated Grouped flag
+                if str(grouped_val).lower() != expected_grouped:
+                    self.logger.info(f"🆙 Updating 'Grouped' state for {indigo_device.name} → {expected_grouped}")
+                    self.updateStateOnServer(indigo_device, "Grouped", expected_grouped)
+
+                # Update plugin-evaluated coordinator flag
+                if str(coord_val).lower() != expected_coord:
+                    self.logger.info(f"🧭 Updating 'GROUP_Coordinator' state for {indigo_device.name} → {expected_coord}")
+                    self.updateStateOnServer(indigo_device, "GROUP_Coordinator", expected_coord)
+
+                # Explicit Group_Name update using indigo_device, not dev
+                old_group_name = indigo_device.states.get("GROUP_Name", "Unavailable")
+                if group_name != old_group_name:
+                    caller = inspect.stack()[1].function
+                    self.logger.warning(f"🧭 TRACE: Group_Name has changed — invoked from: {caller} — will write new value: {group_name}")
+                    try:
+                        indigo_device.updateStateOnServer("GROUP_Name", group_name)
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to write GROUP_Name='{group_name}' to {indigo_device.name}: {e}")
+
+                # Fallback update if not already handled
+                if "GROUP_Name" not in indigo_device.states:
+                    self.logger.error(f"❌ Cannot update GROUP_Name for {indigo_device.name} — state key not defined!")
+                elif group_name and group_name != name_val:
+                    self.logger.info(f"🧩 Updating 'GROUP_Name' for {indigo_device.name} → '{group_name}' (previous: {name_val})")
+                    self.updateStateOnServer(indigo_device, "GROUP_Name", group_name)
+
+                # ✅ Add to plugin-evaluated group tracking dict
+                self.logger.debug(f"✅ Adding {indigo_device.name} to evaluated group '{group_name}'")
+                self.evaluated_group_members_by_coordinator[group_name].append(indigo_device)
+
+
+
 
                     
 
@@ -4901,6 +5622,7 @@ class SonosPlugin(object):
                 self.rebuild_ip_to_device_map()
             if hasattr(self, "rebuild_uuid_maps_from_soco"):
                 self.rebuild_uuid_maps_from_soco()
+                self.logger.warning(f"📌 DEBUG: uuid_to_indigo_device now contains {len(self.uuid_to_indigo_device)} entries")
 
             #self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
             self.evaluate_and_update_grouped_states()
@@ -4926,6 +5648,7 @@ class SonosPlugin(object):
 
             coordinator_ip = coordinator.ip_address.strip()
             is_coordinator = (coordinator_ip == indigo_device.address.strip())
+            #self.trace_me(indigo_device)
             current_group_name = coordinator.player_name or ""
 
             # Update coordinator and group name state
@@ -5160,40 +5883,65 @@ class SonosPlugin(object):
             dev.updateStateOnServer("ZP_ART", f"http://localhost:8888/sonos_art_{zone_ip}.jpg")
 
         
-
-
-
-
-
-
     def updateStateOnServer(self, dev, state, value):
+        if state not in dev.states:
+            self.plugin.logger.error(f"❌ Tried to update undefined state '{state}' on device '{dev.name}'")
+            return
+
         if self.plugin.stateUpdatesDebug:
             self.plugin.debugLog(u"\t Updating Device: %s, State: %s, Value: %s" % (dev.name, state, value))
-        GROUP_Coordinator = dev.states['GROUP_Coordinator']
-        if GROUP_Coordinator == "false" and state in ZoneGroupStates:
-            pass
-        else:
-            if value == None or value == "None":
-                dev.updateStateOnServer(state, "")
-            else:
-                dev.updateStateOnServer(state, value.encode('utf-8'))
 
-        # Replicate states to slave ZonePlayers
-        if state in ZoneGroupStates and dev.states['GROUP_Coordinator'] == "true" and dev.states['ZonePlayerUUIDsInGroup'].find(",") != -1:
+        GROUP_Coordinator = dev.states.get('GROUP_Coordinator', "false")
+        if GROUP_Coordinator == "false" and state in ZoneGroupStates:
+            return
+
+        # Encode and update
+        val = "" if value in [None, "None"] else value.encode('utf-8')
+        dev.updateStateOnServer(state, val)
+
+        # 🧠 Store in internal dict for reliable GROUP_Name tracking
+        if state == "GROUP_Name":
+            if hasattr(self.plugin, "group_name_by_device_id"):
+                self.plugin.group_name_by_device_id[dev.id] = val
+            else:
+                self.plugin.logger.warning(f"⚠️ GROUP_Name fallback cache not initialized for device '{dev.name}'")
+
+
+        # 🔍 Post-write verification (re-fetch the device from Indigo to confirm persistence)
+        try:
+            refreshed = indigo.devices[dev.id]
+            confirmed_val = refreshed.states.get(state, "<missing>")
+            #self.plugin.logger.info(f"🧪 POST-WRITE REFETCH: {refreshed.name} {state} = {confirmed_val}")
+        except Exception as e:
+            self.plugin.logger.warning(f"⚠️ Post-write re-fetch failed for {dev.name}: {e}")
+
+        # Propagate to slaves
+        if (
+            state in ZoneGroupStates and
+            GROUP_Coordinator == "true" and
+            dev.states.get('ZonePlayerUUIDsInGroup', "").find(",") != -1
+        ):
             self.plugin.debugLog("Replicate state to slave ZonePlayers...")
             ZonePlayerUUIDsInGroup = dev.states['ZonePlayerUUIDsInGroup'].split(',')
             for rdev in indigo.devices.iter("self.ZonePlayer"):
-                SlaveUID = rdev.states['ZP_LocalUID']
-                GROUP_Coordinator = rdev.states['GROUP_Coordinator']
-                if SlaveUID != dev.states['ZP_LocalUID'] and GROUP_Coordinator == "false" and SlaveUID in ZonePlayerUUIDsInGroup:
+                SlaveUID = rdev.states.get('ZP_LocalUID')
+                if (
+                    SlaveUID != dev.states['ZP_LocalUID']
+                    and rdev.states.get('GROUP_Coordinator') == "false"
+                    and SlaveUID in ZonePlayerUUIDsInGroup
+                ):
+                    slave_val = "" if value in [None, "None"] else value.encode('utf-8')
                     if state == "ZP_CurrentURI":
-                        value = uri_group + dev.states['ZP_LocalUID']
+                        slave_val = uri_group + dev.states['ZP_LocalUID']
                     if self.plugin.stateUpdatesDebug:
-                        self.plugin.debugLog(u"\t Updating Device: %s, State: %s, Value: %s" % (rdev.name, state, value))
-                    if value == None or value == "None":
-                        rdev.updateStateOnServer(state, "")
-                    else:
-                        rdev.updateStateOnServer(state, value.encode('utf-8'))
+                        self.plugin.debugLog(u"\t Updating Device: %s, State: %s, Value: %s" % (rdev.name, state, slave_val))
+                    rdev.updateStateOnServer(state, slave_val)
+
+
+
+
+
+
 
 
 
@@ -5222,6 +5970,7 @@ class SonosPlugin(object):
 
     def copyStateFromMaster(self, dev):
         self.plugin.debugLog("Copy states from master ZonePlayer...")
+        #self.trace_me() 
         (MasterUID,x) = dev.states['GROUP_Name'].split(":")
         for mdev in indigo.devices.iter("self.ZonePlayer"):
             if mdev.states['ZP_LocalUID'] == MasterUID:
@@ -5368,6 +6117,7 @@ class SonosPlugin(object):
                         self.updateStateOnServer (dev, "GROUP_Coordinator", 'true')
                     else:
                         self.updateStateOnServer (dev, "GROUP_Coordinator", 'false')
+                    #self.trace_me()
                     self.updateStateOnServer (dev, "GROUP_Name", ZoneGroup.attrib['ID'])                
                     self.updateStateOnServer (dev, "bootseq", ZonePlayer.attrib['BootSeq'])
  
@@ -5456,6 +6206,7 @@ class SonosPlugin(object):
         Only runs after startup and assumes device states are generally initialized.
         """
         try:
+            #self.trace_me()
             self.logger.info(f"🔄 Runtime: Updating playback metadata to slaves for group '{coordinator_dev.states.get('GROUP_Name', 'Unknown')}'")
 
             coordinator_ip = coordinator_dev.address.strip()
@@ -5514,6 +6265,7 @@ class SonosPlugin(object):
         Ensures that all expected state keys are initialized for the given device.
         This method mirrors the behavior of deviceStartComm() to prevent 'state key not defined' errors.
         """
+        #self.trace_me()
         try:
             # Define all expected state keys with default empty values
             expected_keys = [
@@ -5539,6 +6291,7 @@ class SonosPlugin(object):
 
     def copyStateFromMaster(self, dev):
         try:
+            #self.trace_me()
             self.safe_debug("Copy states from master ZonePlayer...")
             try:
                 MasterUID, x = dev.states['GROUP_Name'].split(":")

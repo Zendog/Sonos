@@ -32,6 +32,10 @@
         <CallbackMethod>menuDumpGroups</CallbackMethod>
     </MenuItem>
 
+    <MenuItem id="RebuildGroupState">
+        <Name>Rebuild Group State</Name>
+        <CallbackMethod>menuRebuildGroupState</CallbackMethod>
+    </MenuItem>
 
 
     <MenuItem id="AuditGroupStates">

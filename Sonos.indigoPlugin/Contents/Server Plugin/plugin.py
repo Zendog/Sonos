@@ -177,7 +177,14 @@ class Plugin(indigo.PluginBase):
         self.Sonos.dump_groups_to_log()
 
 
+    def menuRebuildGroupState(self):
+        if not self.Sonos or not hasattr(self.Sonos, "reinitialize_and_rebuild_group_state"):
+            self.logger.warning("🚫 Sonos instance or rebuild method is missing.")
+            return
 
+        self.logger.info("📦 Invoking Sonos → reinitialze_and_rebuild_group_state()...")
+        self.Sonos.reinitialize_and_rebuild_group_state()
+        self.logger.info("✅ Group state rebuild from menu complete...")
 
     def menuDumpSiriusXMChannels(self):
         if not self.Sonos or not hasattr(self.Sonos, "dump_siriusxm_channels_to_log"):
