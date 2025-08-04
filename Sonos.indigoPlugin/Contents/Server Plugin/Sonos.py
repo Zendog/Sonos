@@ -222,7 +222,10 @@ PollyVoices = []
 NSVoices = []
 
 
-
+class PA():
+    def __init__(self, deviceId=None, props=None):
+        self.deviceId = deviceId
+        self.props = props
 
 class SonosPlugin(object):
 
@@ -398,6 +401,8 @@ class SonosPlugin(object):
     ############################################################################################
 
     def actionDirect(self, pluginAction, action_id_override=None):
+
+
         try:
             #self.logger.warning("🧪 [LOG 0] Entered actionDirect")
 
@@ -411,7 +416,9 @@ class SonosPlugin(object):
                 "Previous": "actionPrevious",
                 "MuteToggle": "actionMuteToggle",
                 "MuteOn": "actionMuteOn",
+
                 "MuteOff": "actionMuteOff",
+                "Volume": "actionVolume",
                 "VolumeUp": "actionVolumeUp",
                 "VolumeDown": "actionVolumeDown",
                 "BassUp": "actionBassUp",
@@ -437,6 +444,9 @@ class SonosPlugin(object):
                 "ChannelDown": "actionChannelDown",
                 "Q_ShuffleToggle": "actionQ_ShuffleToggle",
                 "Q_Shuffle": "actionQ_Shuffle",
+                "ZP_SonosFavorites": "ZP_SonosFavorites",
+                "ZP_SonosRadio": "ZP_SonosRadio",
+                "ZP_Container": "ZP_Container",
                 "Q_RepeatToggle": "actionQ_RepeatToggle",
             }
 
@@ -559,6 +569,17 @@ class SonosPlugin(object):
 
                 return
 
+#DT Here
+
+            if dev.states["GROUP_Coordinator"] == "false":
+                Coordinator = dev.states["GROUP_Name"]
+                for idev in indigo.devices.iter("self.ZonePlayer"):
+                    if idev.states["GROUP_Coordinator"] == "true" and idev.states["GROUP_Name"] == Coordinator:
+                        CoordinatorIP = idev.pluginProps["address"]
+                        CoordinatorDev = self.getCoordinatorDevice(dev)
+                        break
+
+
             if action_id == "Pause":
                 self.plugin.debugLog("Sonos Action: Pause")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
@@ -668,7 +689,6 @@ class SonosPlugin(object):
                 new_volume = max(0, int(current_volume) - 2)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>-2</Adjustment>")
                 indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
-
             elif action_id == "GroupVolumeUp":
                 self.plugin.debugLog("Sonos Action: Group Volume Up")
                 current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
@@ -822,6 +842,17 @@ class SonosPlugin(object):
                 self.logger.info(f"🎵 Treble decreased on {dev.name}: {current} → {newVal}")
                 self.refresh_transport_state(zoneIP)
                 return
+    
+            elif action_id == "actionVolume":
+                self.logger.warning(f"[Debug] Received action_id: '{action_id}'")
+                self.plugin.debugLog("Sonos Action: Volume")
+                current_volume = dev.states["ZP_VOLUME"]
+                new_volume = int(eval(self.plugin.substitute(pluginAction.props.get("setting"))))
+                if new_volume < 0 or new_volume > 100:
+                    new_volume = current_volume
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetVolume", "<Channel>Master</Channel><DesiredVolume>"+str(new_volume)+"</DesiredVolume>")
+                indigo.server.log(u"ZonePlayer: %s, Current Volume: %s, New Volume: %s" % (dev.name, current_volume, new_volume))
+                return
 
             elif action_id == "actionVolumeUp":
                 self.safe_debug("🧪 Matched action_id == actionVolumeUp")
@@ -843,7 +874,6 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_VOLUME_MASTER", new_volume)
                     self.safe_debug(f"🔁 Synced ZP_VOLUME_MASTER from {coordinator_dev.name} → {dev.name}")
-
                 return
 
             elif action_id == "actionVolumeDown":
@@ -864,7 +894,6 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_VOLUME_MASTER", new_volume)
                     self.safe_debug(f"🔁 Synced ZP_VOLUME_MASTER from {coordinator_dev.name} → {dev.name}")
-
                 return
 
             elif action_id == "actionMuteToggle":
@@ -944,6 +973,107 @@ class SonosPlugin(object):
                     self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "<Speed>1</Speed>")
                     self.logger.info(f"⏸ Pause for {dev.name}")
                 return
+
+
+    #####################################################################################################
+    ### Start of action direct statements added code for action command support of favorites and volume
+    #####################################################################################################
+
+            elif action_id == "ZP_SonosFavorites":
+                setting = pluginAction.props.get("setting")
+                for uri in Sonos_Favorites:
+                    if uri[4] == setting:
+                        l2p=uri[0]
+                        break
+                mode = pluginAction.props.get("mode")
+                if mode == "":
+                    mode = "Play Now"
+                    return
+                if uri_radio in l2p:
+                    self.actionDirect (PA(dev.id, {"setting":l2p}), "ZP_RT_FavStation")
+                    return
+                elif uri_pandora in l2p:
+                    setting = l2p[l2p.find(":")+1:l2p.find("?")]
+                    self.actionDirect (PA(dev.id, {"setting":setting}), "ZP_Pandora")
+                    return
+                elif uri_siriusxm in l2p:
+                    #setting = l2p[l2p.find("%3a")+3:l2p.find("?")]
+                    setting = urllib.unquote(l2p[l2p.find(":")+1:l2p.find("?")])
+                    self.actionDirect (PA(dev.id, {"setting":setting}), "ZP_SiriusXM")
+                    return
+                elif uri_spotify in l2p:
+                    self.actionDirect (PA(dev.id, {"setting":l2p, "mode":mode}), "ZP_Container")
+                    return                
+                elif uri_container in l2p or uri_jffs in l2p or uri_playlist in l2p or uri_file in l2p:
+                    self.actionDirect (PA(dev.id, {"setting":l2p, "mode":mode}), "ZP_Container")
+                    return
+                elif uri_sonos_radio in l2p:
+                    self.actionDirect (PA(dev.id, {"setting":l2p}), "ZP_SonosRadio")
+                    return
+                else:
+                    indigo.server.log ("I do not know what to do with Favorite: %s" % l2p)
+                    return
+
+            elif action_id =="ZP_SonosRadio":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = coordinator_dev.pluginProps.get("address", "").strip()
+                l2p = pluginAction.props.get("setting")
+                for title in Sonos_Favorites:
+                    if title[0] == l2p:
+                        pTitle = self.cleanString(title[1]).encode('ascii', 'xmlcharrefreplace')
+                        URI = title[3]
+                        MD = title[2]
+                        break
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>"+URI+"</CurrentURI><CurrentURIMetaData>"+MD+"</CurrentURIMetaData>")
+                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                indigo.server.log ("ZonePlayer: %s, Play Radio: %s" % (dev.name, pTitle))
+                return
+
+            elif action_id == "ZP_Container":
+                if dev.states["GROUP_Coordinator"] == "false":
+                    zoneIP = coordinator_dev.pluginProps.get("address", "").strip()
+                    dev_src_LocalUID = coordinator_dev.states['ZP_LocalUID']
+                    #dev_src_LocalUID = CoordinatorDev.states['ZP_LocalUID']
+                else:
+                    dev_src_LocalUID = dev.states['ZP_LocalUID']                
+                l2p = pluginAction.props.get("setting")
+                mode = pluginAction.props.get("mode")
+                #(uri_header, uri_detail) = l2p.split(':')
+                for title in Sonos_Favorites:
+                    if title[0] == l2p:
+                        pTitle = self.cleanString(title[1]).encode('ascii', 'xmlcharrefreplace')
+                        MD = title[2]
+                        break
+
+                # SONOS api change for Favorites?
+                l2p = l2p.replace("&", "&amp;")
+
+                if mode == "Play Now":
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                elif mode == "Play Next":
+                    #current_track = self.parseCurrentTrack(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "GetPositionInfo", ""))
+                    current_track = dev.states['ZP_CurrentTrack']
+                    indigo.server.log(current_track)
+                    track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>"+str(int(current_track)+1)+"</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                elif mode == "Add To Queue":
+                    track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                elif mode == "Replace Queue":
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetAVTransportURI", "<CurrentURI>x-rincon-queue:"+str(dev_src_LocalUID)+"#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "RemoveAllTracksFromQueue", "")
+                    track_pos = self.parseFirstTrackNumberEnqueued(dev, self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "AddURIToQueue", "<EnqueuedURI>"+l2p+"</EnqueuedURI><EnqueuedURIMetaData>"+MD+"</EnqueuedURIMetaData><DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued><EnqueueAsNext>1</EnqueueAsNext>"))
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Seek", "<Unit>TRACK_NR</Unit><Target>"+track_pos+"</Target>")
+                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
+                indigo.server.log ("ZonePlayer: %s, Play: %s" % (dev.name, pTitle))
+                return
+
+    ############################################################################################
+    #### end of added code for action command support of favorites and volume
+    ############################################################################################
+
+
 
             elif action_id == "addPlayersToZone":
                 zones = []
