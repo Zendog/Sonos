@@ -541,31 +541,25 @@ class SonosPlugin(object):
 
             # Dispatch handler mapping (global or device-aware)
             dispatch_table = {
-                "SetSiriusXMChannel": lambda p, d, z: self.handleAction_SetSiriusXMChannel(p, d, z),
-                "actionZP_SiriusXM": lambda p, d, z: self.handleAction_ZP_SiriusXM(p, d, z),
-                "actionZP_Pandora": lambda p, d, z: self.handleAction_ZP_Pandora(p, d, z, p.props),
-                "actionChannelUp": lambda p, d, z: self.handleAction_ChannelUp(p, d, z),
-                "actionChannelDown": lambda p, d, z: self.handleAction_ChannelDown(p, d, z),
-                "actionZP_addPlayerToZone": lambda p, d, z: self.handleAction_ZP_addPlayerToZone(p, d, z),
-                "actionQ_Shuffle": lambda p, d, z: self.handleAction_Q_Shuffle(p, d, z),
-                "actionQ_Crossfade": lambda p, d, z: self.handleAction_Q_Crossfade(p, d, z),
+                "SetSiriusXMChannel":        lambda p, d, z: self.handleAction_SetSiriusXMChannel(p, d, z),
+                "actionZP_SiriusXM":         lambda p, d, z: self.handleAction_ZP_SiriusXM(p, d, z),
+                "actionZP_Pandora":          lambda p, d, z: self.handleAction_ZP_Pandora(p, d, z, p.props),
+                "actionChannelUp":           lambda p, d, z: self.handleAction_ChannelUp(p, d, z),
+                "actionChannelDown":         lambda p, d, z: self.handleAction_ChannelDown(p, d, z),
+                "actionZP_addPlayerToZone":  lambda p, d, z: self.handleAction_ZP_addPlayerToZone(p, d, z),
+                "actionQ_Shuffle":           lambda p, d, z: self.handleAction_Q_Shuffle(p, d, z),
+                "actionQ_Crossfade":         lambda p, d, z: self.handleAction_Q_Crossfade(p, d, z),
             }
-
 
             device_id = int(pluginAction.deviceId)
             #self.logger.warning(f"🧪 [LOG 3] pluginAction.deviceId: {device_id}")
 
             # === Global Actions (e.g., from Control Pages) ===
-
-
-
-
-            
             if device_id == 0:
                 #self.logger.warning(f"🧪 [LOG 3.5] Global action (deviceId = 0) detected: {action_id}")
 
                 if action_id == "setStandalones":
-                    self.logger.warning(f"I am going to set standalones from a state where they are grouped")                    
+                    self.logger.warning(f"I am going to set standalones from a state where they are grouped")
                     zones = []
                     for x in range(1, 13):
                         ivar = f'zp{x}'
@@ -583,11 +577,11 @@ class SonosPlugin(object):
                             self.SOAPSend(dev.pluginProps["address"], "/MediaRenderer", "/AVTransport",
                                           "SetAVTransportURI",
                                           f"<CurrentURI>x-rincon-queue:{dev.states['ZP_LocalUID']}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
-#DT_Test
+                            #DT_Test
                             self.logger.warning(f"DT_Test")
                             self.refresh_group_topology_after_plugin_zone_change()
-                            self.refresh_all_group_states()            
-                            self.evaluate_and_update_grouped_states()                            
+                            self.refresh_all_group_states()
+                            self.evaluate_and_update_grouped_states()
                         except Exception as e:
                             self.logger.error(f"❌ Failed to ungroup device {item}: {e}")
                     return
@@ -604,7 +598,7 @@ class SonosPlugin(object):
                 self.logger.error(f"❌ Device ID {device_id} not found in Indigo database")
                 return
 
-            # Determine coordinator device and IP
+            # Determine coordinator device and IP (single calculation)
             coordinator_dev = self.getCoordinatorDevice(dev)
             coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
 
@@ -615,33 +609,17 @@ class SonosPlugin(object):
             else:
                 self.logger.debug(f"✅ {dev.name} is the coordinator — using direct control")
 
-            #self.logger.warning(f"🧪 [LOG 5] zoneIP resolved to: {zoneIP}")
-            #self.logger.warning(f"🧪 [LOG 6] dev.states keys: {list(dev.states.keys())}")
-            #self.logger.warning(f"🧪 [LOG 7] dev.pluginProps keys: {list(dev.pluginProps.keys())}")
-            #self.logger.warning(f"🧪 [LOG 8] Grouped: {dev.states.get('Grouped', 'MISSING')}, GROUP_Coordinator: {dev.states.get('GROUP_Coordinator', 'MISSING')}")
- 
+            # Seed Coordinator* vars so later branches are safe
+            CoordinatorIP = coordinator_ip
+            CoordinatorDev = coordinator_dev
 
-
-            # Call matching handler
+            # Fast-path: dedicated handlers
             if action_id in dispatch_table:
                 dispatch_table[action_id](pluginAction, dev, zoneIP)
                 return
 
-            # Inline action handlers follow...
-            # Get Indigo device and coordinator
-            dev = indigo.devices[pluginAction.deviceId]
-            coordinator_dev = self.getCoordinatorDevice(dev)
-            zoneIP = coordinator_dev.pluginProps.get("address", "").strip()
-
-            # Redirect zoneIP if grouped
-            if coordinator_dev.id != dev.id:
-                self.logger.debug(f"🔁 Redirecting action from slave {dev.name} to coordinator {coordinator_dev.name}")
-            else:
-                self.logger.debug(f"✅ {dev.name} is the coordinator — executing command directly")
-
             # === Transport Actions ===
-
-            if action_id == "Play":
+            if action_id in ("actionPlay", "Play"):
                 self.plugin.debugLog("Sonos Action: Play")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Play", "<Speed>1</Speed>")
                 self.logger.info(f"▶️ Play sent to {coordinator_dev.name}")
@@ -649,11 +627,9 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_STATE", "PLAYING")
                     self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: PLAYING")
-
                 return
 
-#DT Here
-
+            #DT Here  (helper must NOT chain into action dispatch)
             if dev.states["GROUP_Coordinator"] == "false":
                 Coordinator = dev.states["GROUP_Name"]
                 for idev in indigo.devices.iter("self.ZonePlayer"):
@@ -662,6 +638,7 @@ class SonosPlugin(object):
                         CoordinatorDev = self.getCoordinatorDevice(dev)
                         break
 
+            # === Start a NEW action dispatch chain (decoupled from the helper above) ===
 
             if action_id == "announcement":
                 # Sanitize and normalize pluginAction.props['setting']
@@ -698,10 +675,9 @@ class SonosPlugin(object):
                 self.logger.debug(f"[🔈 Volume Level] = {volume}")
                 self.logger.debug(f"[🎵 File] = {file}")
                 self.logger.debug(f"[🌐 Target IP] = {ip_addr}")
+                return
 
-
-
-            if action_id == "Pause":
+            elif action_id in ("actionPause", "Pause"):
                 self.plugin.debugLog("Sonos Action: Pause")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Pause", "")
                 self.logger.info(f"⏸ Pause sent to {coordinator_dev.name}")
@@ -709,10 +685,9 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_STATE", "PAUSED_PLAYBACK")
                     self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: PAUSED_PLAYBACK")
-
                 return
 
-            if action_id == "Stop":
+            elif action_id in ("actionStop", "Stop"):
                 self.plugin.debugLog("Sonos Action: Stop")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Stop", "")
                 self.logger.info(f"⏹ Stop sent to {coordinator_dev.name}")
@@ -720,10 +695,9 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_STATE", "STOPPED")
                     self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: STOPPED")
-
                 return
 
-            if action_id == "TogglePlay":
+            elif action_id in ("actionTogglePlay", "TogglePlay"):
                 self.plugin.debugLog("Sonos Action: Toggle Play")
                 current_state = coordinator_dev.states.get("ZP_STATE", "").upper()
 
@@ -739,52 +713,81 @@ class SonosPlugin(object):
                 if dev.id != coordinator_dev.id:
                     dev.updateStateOnServer("ZP_STATE", new_state)
                     self.safe_debug(f"🔁 Synced ZP_STATE from {coordinator_dev.name} → {dev.name}: {new_state}")
-
                 return
 
             # Mute Controls
-            elif action_id == "MuteToggle":
+            elif action_id in ("actionMuteToggle", "MuteToggle"):
                 self.plugin.debugLog("Sonos Action: Mute Toggle")
-                if int(dev.states["ZP_MUTE"]) == 0:
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
-                    indigo.server.log("ZonePlayer: %s, Mute On" % dev.name)
-                else:
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
-                    indigo.server.log("ZonePlayer: %s, Mute Off" % dev.name)
+
+                # dev.states["ZP_MUTE"] can be "0"/"1" or "true"/"false" (string) — normalize safely
+                raw = dev.states.get("ZP_MUTE", 0)
+                raw_s = str(raw).strip().lower()
+                is_muted = raw_s in ("1", "true", "on", "yes")
+
+                desired_mute = "0" if is_muted else "1"
+                self.SOAPSend(
+                    zoneIP,
+                    "/MediaRenderer",
+                    "/RenderingControl",
+                    "SetMute",
+                    f"<Channel>Master</Channel><DesiredMute>{desired_mute}</DesiredMute>"
+                )
+
+                indigo.server.log("ZonePlayer: %s, Mute %s" % (dev.name, "Off" if is_muted else "On"))
                 return
 
-            if action_id == "MuteOn":
+
+
+            elif action_id in ("actionMuteOn", "MuteOn"):
                 self.plugin.debugLog("Sonos Action: Mute On")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>1</DesiredMute>")
                 indigo.server.log("ZonePlayer: %s, Mute On" % dev.name)
+                return
 
-            elif action_id == "MuteOff":
+            elif action_id in ("actionMuteOff", "MuteOff"):
                 self.plugin.debugLog("Sonos Action: Mute Off")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetMute", "<Channel>Master</Channel><DesiredMute>0</DesiredMute>")
                 indigo.server.log("ZonePlayer: %s, Mute Off" % dev.name)
+                return
 
             # Group Mute Controls
-            elif action_id == "GroupMuteToggle":
+            elif action_id in ("actionGroupMuteToggle", "GroupMuteToggle"):
                 self.plugin.debugLog("Sonos Action: Group Mute Toggle")
-                if int(self.parseCurrentMute(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", ""))) == 0:
-                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
-                    indigo.server.log("ZonePlayer Group: %s, Mute On" % dev.name)
-                else:
-                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
-                    indigo.server.log("ZonePlayer Group: %s, Mute Off" % dev.name)
 
-            elif action_id == "GroupMuteOn":
+                # parseCurrentMute(...) may return "0"/"1" or "true"/"false" — normalize safely
+                gmute_raw = self.parseCurrentMute(
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupMute", "")
+                )
+                gmute_s = str(gmute_raw).strip().lower()
+                group_is_muted = gmute_s in ("1", "true", "on", "yes")
+
+                desired_group_mute = "0" if group_is_muted else "1"
+                self.SOAPSend(
+                    zoneIP,
+                    "/MediaRenderer",
+                    "/GroupRenderingControl",
+                    "SetGroupMute",
+                    f"<DesiredMute>{desired_group_mute}</DesiredMute>"
+                )
+
+                indigo.server.log("ZonePlayer Group: %s, Mute %s" % (dev.name, "Off" if group_is_muted else "On"))
+                return
+
+
+            elif action_id in ("actionGroupMuteOn", "GroupMuteOn"):
                 self.plugin.debugLog("Sonos Action: Group Mute On")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>1</DesiredMute>")
                 indigo.server.log("ZonePlayer Group: %s, Mute On" % dev.name)
+                return
 
-            elif action_id == "GroupMuteOff":
+            elif action_id in ("actionGroupMuteOff", "GroupMuteOff"):
                 self.plugin.debugLog("Sonos Action: Group Mute Off")
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupMute", "<DesiredMute>0</DesiredMute>")
                 indigo.server.log("ZonePlayer Group: %s, Mute Off" % dev.name)
+                return
 
             # Group Volume Controls
-            elif action_id == "GroupVolume":
+            elif action_id in ("actionGroupVolume", "GroupVolume"):
                 self.plugin.debugLog("Sonos Action: Group Volume")
                 current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                 new_volume = int(eval(self.plugin.substitute(pluginAction.props.get("setting"))))
@@ -792,8 +795,9 @@ class SonosPlugin(object):
                     new_volume = current_volume
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetGroupVolume", f"<DesiredVolume>{new_volume}</DesiredVolume>")
                 indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+                return
 
-            elif action_id == "RelativeGroupVolume":
+            elif action_id in ("actionRelativeGroupVolume", "RelativeGroupVolume"):
                 self.plugin.debugLog("Sonos Action: Relative Group Volume")
                 current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                 adjustment = pluginAction.props.get("setting")
@@ -804,29 +808,35 @@ class SonosPlugin(object):
                 new_volume = max(0, min(new_volume, 100))
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", f"<Adjustment>{adjustment}</Adjustment>")
                 indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+                return
 
-            elif action_id == "GroupVolumeDown":
+            elif action_id in ("actionGroupVolumeDown", "GroupVolumeDown"):
                 self.plugin.debugLog("Sonos Action: Group Volume Down")
                 current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                 new_volume = max(0, int(current_volume) - 2)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>-2</Adjustment>")
                 indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
-            elif action_id == "GroupVolumeUp":
+                return
+
+            elif action_id in ("actionGroupVolumeUp", "GroupVolumeUp"):
                 self.plugin.debugLog("Sonos Action: Group Volume Up")
                 current_volume = self.parseCurrentVolume(self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "GetGroupVolume", ""))
                 new_volume = min(100, int(current_volume) + 2)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/GroupRenderingControl", "SetRelativeGroupVolume", "<Adjustment>2</Adjustment>")
                 indigo.server.log(f"ZonePlayer Group: {dev.name}, Current Group Volume: {current_volume}, New Group Volume: {new_volume}")
+                return
 
-            elif action_id == "Q_Crossfade":
+            elif action_id in ("actionQ_Crossfade", "Q_Crossfade"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 mode = pluginAction.props.get("setting")
                 if mode == 0:
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>0</CrossfadeMode>")
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>0</CrossfadeMode>")
                 elif mode == 1:
-                    self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>1</CrossfadeMode>")
-            elif action_id == "Q_Repeat":
+                    self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetCrossfadeMode", "<CrossfadeMode>1</CrossfadeMode>")
+                return
+
+            elif action_id in ("actionQ_Repeat", "Q_Repeat"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 repeat = bool(int(pluginAction.props.get("setting")))
@@ -837,8 +847,10 @@ class SonosPlugin(object):
                 else:
                     PlayMode = self.QMode(repeat, repeat_one, shuffle)
                 self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
-            elif action_id == "Q_RepeatOne":
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                return
+
+            elif action_id in ("actionQ_RepeatOne", "Q_RepeatOne"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 repeat_one = bool(int(pluginAction.props.get("setting")))
@@ -849,8 +861,10 @@ class SonosPlugin(object):
                 else:
                     PlayMode = self.QMode(repeat, repeat_one, shuffle)
                 self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
-            elif action_id == "Q_RepeatToggle":
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                return
+
+            elif action_id in ("actionQ_RepeatToggle", "Q_RepeatToggle"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 repeat = self.boolConv(dev.states["Q_Repeat"])
@@ -863,8 +877,10 @@ class SonosPlugin(object):
                 else:
                     PlayMode = self.QMode(False, False, shuffle)
                 self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
-            elif action_id == "Q_Shuffle":
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                return
+
+            elif action_id in ("actionQ_Shuffle", "Q_Shuffle"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 shuffle = bool(int(pluginAction.props.get("setting")))
@@ -872,8 +888,10 @@ class SonosPlugin(object):
                 repeat_one = self.boolConv(dev.states["Q_RepeatOne"])
                 PlayMode = self.QMode(repeat, repeat_one, shuffle)
                 self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
-            elif action_id == "Q_ShuffleToggle":
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                return
+
+            elif action_id in ("actionQ_ShuffleToggle", "Q_ShuffleToggle"):
                 if dev.states["GROUP_Coordinator"] == "false":
                     zoneIP = CoordinatorIP
                 repeat = self.boolConv(dev.states["Q_Repeat"])
@@ -884,10 +902,13 @@ class SonosPlugin(object):
                 else:
                     PlayMode = self.QMode(repeat, repeat_one, True)
                 self.plugin.debugLog("Sonos Action: PlayMode %s" % PlayMode)
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "SetPlayMode", "<NewPlayMode>"+PlayMode+"</NewPlayMode>")
+                return
+
             elif action_id == "Q_Clear":
-                self.SOAPSend (zoneIP, "/MediaRenderer", "/Queue", "RemoveAllTracks", "<QueueID>0</QueueID><UpdateID>0</UpdateID>")
+                self.SOAPSend(zoneIP, "/MediaRenderer", "/Queue", "RemoveAllTracks", "<QueueID>0</QueueID><UpdateID>0</UpdateID>")
                 indigo.server.log("ZonePlayer: %s, Clear Queue" % dev.name)
+                return
 
             elif action_id == "Q_Save":
                 self.updateZoneTopology(dev)
@@ -920,6 +941,7 @@ class SonosPlugin(object):
                                     self.actionDirect(PA(dev.id, {"setting":ObjectID}), "CD_RemovePlaylist")
                             self.updateStateOnServer (dev, "Q_ObjectID", "")
                         self.plugin.debugLog ("ZonePlayer: %s, Nothing in Queue to Save" % dev.name)
+                return
 
             elif action_id == "CD_RemovePlaylist":
                 ObjectID = pluginAction.props.get("setting")
@@ -927,9 +949,10 @@ class SonosPlugin(object):
                     if plist[2] == ObjectID:
                         PlaylistName = plist[1]
                         self.SOAPSend (zoneIP, "/MediaServer", "/ContentDirectory", "DestroyObject", "<ObjectID>" + ObjectID + "</ObjectID>")
-                    indigo.server.log ("ZonePlayer: %s, Remove Playlist: %s" % (dev.name, PlaylistName))
+                indigo.server.log ("ZonePlayer: %s, Remove Playlist: %s" % (dev.name, PlaylistName))
+                return
 
-            if action_id == "actionBassUp":
+            elif action_id == "actionBassUp":
                 current = int(dev.states.get("ZP_BASS", 0))
                 newVal = max(min(current + 1, 10), -10)
                 self.SOAPSend(zoneIP, "/MediaRenderer", "/RenderingControl", "SetBass",
@@ -964,7 +987,7 @@ class SonosPlugin(object):
                 self.logger.info(f"🎵 Treble decreased on {dev.name}: {current} → {newVal}")
                 self.refresh_transport_state(zoneIP)
                 return
-    
+        
             elif action_id == "actionVolume":
                 self.logger.warning(f"[Debug] Received action_id: '{action_id}'")
                 self.plugin.debugLog("Sonos Action: Volume")
@@ -978,10 +1001,6 @@ class SonosPlugin(object):
 
             elif action_id == "actionVolumeUp":
                 self.safe_debug("🧪 Matched action_id == actionVolumeUp")
-
-                coordinator_dev = self.getCoordinatorDevice(dev)
-                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
-                zoneIP = coordinator_ip
 
                 # Pull volume from coordinator (not the slave!)
                 current = int(coordinator_dev.states.get("ZP_VOLUME_MASTER", 0))
@@ -1001,10 +1020,6 @@ class SonosPlugin(object):
             elif action_id == "actionVolumeDown":
                 self.safe_debug("🧪 Matched action_id == actionVolumeDown")
 
-                coordinator_dev = self.getCoordinatorDevice(dev)
-                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
-                zoneIP = coordinator_ip
-
                 current = int(coordinator_dev.states.get("ZP_VOLUME_MASTER", 0))
                 new_volume = max(0, current - 5)
 
@@ -1021,10 +1036,6 @@ class SonosPlugin(object):
             elif action_id == "actionMuteToggle":
                 self.safe_debug("🧪 Matched action_id == actionMuteToggle")
 
-                coordinator_dev = self.getCoordinatorDevice(dev)
-                coordinator_ip = coordinator_dev.pluginProps.get("address", "").strip()
-                zoneIP = coordinator_ip
-
                 # Get mute state from coordinator, not slave
                 raw_state = coordinator_dev.states.get("ZP_MUTE", "unknown")
                 mute_state = str(raw_state).lower() == "true"
@@ -1040,7 +1051,6 @@ class SonosPlugin(object):
                     new_state = "false" if mute_state else "true"
                     dev.updateStateOnServer("ZP_MUTE", new_state)
                     self.safe_debug(f"🔁 Synced ZP_MUTE from {coordinator_dev.name} → {dev.name}: {new_state}")
-
                 return
 
             elif action_id == "actionMuteOn":
@@ -1072,7 +1082,7 @@ class SonosPlugin(object):
                 else:
                     self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Next", "<InstanceID>0</InstanceID>")
                     self.logger.info(f"⏭️ Next track for {dev.name}")
-                return
+                    return
 
             elif action_id == "actionPrevious":
                 uri = dev.states.get("ZP_CurrentTrackURI", "") or dev.states.get("ZP_AVTransportURI", "")
@@ -1084,7 +1094,7 @@ class SonosPlugin(object):
                 else:
                     self.SOAPSend(zoneIP, "/MediaRenderer", "/AVTransport", "Previous", "<InstanceID>0</InstanceID>")
                     self.logger.info(f"⏮️ Previous track for {dev.name}")
-                return
+                    return
 
             elif action_id == "actionTogglePlay":
                 state = dev.states.get("ZP_STATE", "STOPPED").upper()
@@ -1096,10 +1106,9 @@ class SonosPlugin(object):
                     self.logger.info(f"⏸ Pause for {dev.name}")
                 return
 
-
-    #####################################################################################################
-    ### Start of action direct statements added code for action command support of favorites and volume
-    #####################################################################################################
+            #####################################################################################################
+            ### Start of action direct statements added code for action command support of favorites and volume
+            #####################################################################################################
 
             elif action_id == "ZP_SonosFavorites":
                 setting = pluginAction.props.get("setting")
@@ -1191,11 +1200,9 @@ class SonosPlugin(object):
                 indigo.server.log ("ZonePlayer: %s, Play: %s" % (dev.name, pTitle))
                 return
 
-    ############################################################################################
-    #### end of added code for action command support of favorites and volume
-    ############################################################################################
-
-
+            ############################################################################################
+            #### end of added code for action command support of favorites and volume
+            ############################################################################################
 
             elif action_id == "addPlayersToZone":
                 zones = []
@@ -1214,6 +1221,7 @@ class SonosPlugin(object):
 
                 self.refresh_all_group_states()
                 self.logger.info(f"✅ tried refresh at end of add ???? ")
+                return
 
             elif action_id == "setStandalone":
                 indigo.server.log(f"🔀 Request to remove zone from group: {dev.name}")
@@ -1257,20 +1265,24 @@ class SonosPlugin(object):
 
                 except Exception as e:
                     self.logger.error(f"❌ Failed to set {dev.name} standalone: {e}")
+                return
 
             elif action_id == "ZP_LIST":
                 self.actionZP_LIST(pluginAction, dev)
                 return
 
-
             # If it gets this far, action was not handled
             self.logger.warning(f"⚠️ Unknown or unsupported action: {action_id}")
+            return
 
         except Exception as e:
             self.logger.error(f"❌ actionDirect exception: {e}")
 
 
-    ### End of Actiondirect List Processing
+
+
+
+
 
 
     ############################################################################################
@@ -5540,7 +5552,6 @@ class SonosPlugin(object):
 #############################################################################################################################################################################################################
 ### Event Handler to process player controls and soco state changes and maintain current dynamic state updates
 #############################################################################################################################################################################################################
-
     def soco_event_handler(self, event_obj):
 
         ## The first try block here can set variables and or log various things that need to be defined or checked ahead of the event processing loop
@@ -5554,19 +5565,21 @@ class SonosPlugin(object):
             #self.logger.warning(f"   ⤷ soco.ip: {soco_ip}")
             #self.logger.warning(f"   ⤷ variables: {event_obj.variables}")
             service_type = getattr(event_obj.service, "service_type", "").lower()
-            sid = getattr(event_obj, "sid", "").lower()
+            # 👇 keep a lowercased copy ONLY for string checks; DO NOT use it for lookups
+            sid_lc = (getattr(event_obj, "sid", "") or "").lower()
+            sid_orig = getattr(event_obj, "sid", "")  # preserve original casing for mapping later
             zone_ip = getattr(getattr(event_obj, "soco", None), "ip_address", None)
         except Exception as log_err:
             self.logger.error(f"❌ Failed to log raw event object: {log_err}")
 
 
 
-#        # the following is a dectection and log event only to see if we can isolate
-#        if not zone_ip:
-#            self.logger.info(f"🔎 ZGT event with no source IP — likely a Sonos response to a command or an unsolicted subscription song change, subscription renewal or other Sonos system or app event.")
-#            #return
-#        else:
-#            self.logger.info(f"🔎 New check - ZoneGroupTopology event triggered by {zone_ip}")
+    #        # the following is a dectection and log event only to see if we can isolate
+    #        if not zone_ip:
+    #            self.logger.info(f"🔎 ZGT event with no source IP — likely a Sonos response to a command or an unsolicted subscription song change, subscription renewal or other Sonos system or app event.")
+    #            #return
+    #        else:
+    #            self.logger.info(f"🔎 New check - ZoneGroupTopology event triggered by {zone_ip}")
 
 
         ######################################################################################################################################################################################################
@@ -5575,15 +5588,15 @@ class SonosPlugin(object):
 
         is_zgt_event = (
             "zonegrouptopology" in service_type or
-            "zonegrouptopology" in sid or
+            "zonegrouptopology" in sid_lc or
             "zone_group_state" in event_obj.variables or
             "ZoneGroupState" in event_obj.variables
         )
 
         if is_zgt_event:
-#            self.logger.info(f"🔎 This is from - (if is_zgt_event) - logic - ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
-#            self.logger.info(f"🧪 9999 zgt event detected entering the event logic now...")
-#            self.logger.info(f"🔎 ZoneGroupTopology event triggered by {zone_ip}")
+    #            self.logger.info(f"🔎 This is from - (if is_zgt_event) - logic - ZoneGroupTopology event from {zone_ip} missing ZoneGroupState")
+    #            self.logger.info(f"🧪 9999 zgt event detected entering the event logic now...")
+    #            self.logger.info(f"🔎 ZoneGroupTopology event triggered by {zone_ip}")
             zone_state_xml = (
                 event_obj.variables.get("zone_group_state") or
                 event_obj.variables.get("ZoneGroupState") or
@@ -5640,11 +5653,12 @@ class SonosPlugin(object):
 
                 except Exception as e:
                     self.logger.error(f"❌ Failed to parse ZoneGroupState XML: {e}")
-#            self.logger.info(f"🧪 zgt event detected EXITING the event logic now...")
+    #            self.logger.info(f"🧪 zgt event detected EXITING the event logic now...")
 
 
         try:
             service_type = getattr(event_obj.service, "service_type", "UNKNOWN")
+            # 👇 keep the original SID here (no .lower()) so mapping by SID works
             sid = getattr(event_obj, "sid", "N/A")
             zone_ip = getattr(event_obj, "zone_ip", None)
 
@@ -5671,9 +5685,12 @@ class SonosPlugin(object):
             #self.logger.debug(f"📡 Event received from {zone_ip} — SID={sid} | Service={service_type}")
             #self.logger.debug(f"📦 Event variables: {getattr(event_obj, 'variables', {})}")
 
-            if "GroupStateChanged" in getattr(event_obj, "variables", {}):
-                self.logger.info("🔄 GroupStateChanged variable present — triggering group state refresh...")
-                return
+            # 👇 Only treat GroupStateChanged as a ZGT hint; do NOT return here so other services still process.
+            vars_dict = getattr(event_obj, "variables", {}) or {}
+            if ("GroupStateChanged" in vars_dict or "groupstatechanged" in vars_dict) and "ZoneGroupTopology" in service_type:
+                self.logger.info("🔄 GroupStateChanged (ZGT) present — triggering group state refresh (no early return)…")
+                # optional: self.refresh_group_topology_after_plugin_zone_change()
+                # fall through to allow transport/rendering updates to be handled
 
             if not zone_ip:
                 zone_ip = "unknown"
@@ -5682,6 +5699,8 @@ class SonosPlugin(object):
 
             self.safe_debug(f"🧪 Event handler fired! SID={getattr(event_obj, 'sid', 'N/A')} zone_ip={zone_ip} Type={type(event_obj)}")
             self.safe_debug(f"🧑‍💻 Full event variables: {getattr(event_obj, 'variables', {})}")
+
+
 
         ######################################################################################################################################################################################################
         ### Transport State processing
