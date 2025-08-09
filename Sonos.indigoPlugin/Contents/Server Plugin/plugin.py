@@ -75,6 +75,11 @@ indiPref_plugin_stopped = """<?xml version="1.0" encoding="UTF-8"?>
 class Plugin(indigo.PluginBase):
 
 
+
+
+
+
+
     ######################################################################################
     # class init & del
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
@@ -140,6 +145,70 @@ class Plugin(indigo.PluginBase):
             getattr(self.Sonos, method_name)(pluginAction, dev)
         else:
             self.logger.warning(f"⚠️ Unknown action requested: {method_name}")
+
+
+
+
+
+    def getSoundFilesList(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """UI List callback for Actions.xml <List ... method='getSoundFilesList'>"""
+        try:
+            # Ensure path known before first scan
+            if not getattr(self, "SoundFilePath", None):
+                self.SoundFilePath = self.pluginPrefs.get(
+                    "SoundFilePath",
+                    "/Library/Application Support/Perceptive Automation/Indigo 2024.2/AudioFiles",
+                )
+
+            # Lazy load if empty
+            if not getattr(self, "Sound_Files", []):
+                self.getSoundFiles()
+
+            self.logger.debug(f"📥 getSoundFilesList() returning {len(self.Sound_Files)} items")
+            return [(f, f) for f in sorted(self.Sound_Files)]
+        except Exception as e:
+            self.logger.error(f"❌ Error in getSoundFilesList(): {e}")
+            return []
+
+    # Back-compat shim in case the XML still references getZP_SoundFiles
+    def getZP_SoundFiles(self, filter="", valuesDict=None, typeId="", targetId=0):
+        return self.getSoundFilesList(filter, valuesDict, typeId, targetId)
+
+    def getSoundFiles(self):
+        """Populate self.Sound_Files from self.SoundFilePath."""
+        try:
+            from os import listdir
+            from os.path import isfile, join
+
+            if not getattr(self, "SoundFilePath", None):
+                self.SoundFilePath = self.pluginPrefs.get(
+                    "SoundFilePath",
+                    "/Library/Application Support/Perceptive Automation/Indigo 2024.2/AudioFiles",
+                )
+
+            self.Sound_Files = []
+            list_count = 0
+
+            self.logger.info(f"🔍 Scanning for MP3s in: {self.SoundFilePath}")
+
+            for f in listdir(self.SoundFilePath):
+                # Only files, and only .mp3
+                try:
+                    if isfile(join(self.SoundFilePath, f)) and f.lower().endswith(".mp3"):
+                        self.Sound_Files.append(f)
+                        list_count += 1
+                        self.logger.debug(f"🎵 Added sound file: {f}")
+                except Exception:
+                    # Ignore odd entries like __pycache__ dirs etc.
+                    continue
+
+            self.logger.info(f"✅ Loaded Sound Files... [{list_count}]")
+        except Exception as e:
+            self.logger.error(f"❌ getSoundFiles() failed: {e}")
+            self.Sound_Files = []
+
+
+
 
 
 
@@ -288,7 +357,7 @@ class Plugin(indigo.PluginBase):
                 return stop_message
 
             from Sonos import SonosPlugin
-            self.logger.warning(f"🧪 Attempting to call deviceStartComm on object of type: {type(self.Sonos)}")
+            self.logger.debug(f"🧪 Attempting to call deviceStartComm on object of type: {type(self.Sonos)}")
             self.logger.debug(f"🧪 Methods available: {dir(self.Sonos)}")
 
 
@@ -342,7 +411,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, dev):
         try:
-            self.logger.warning(f"🧪 plugin.py deviceStartComm() CALLED for {dev.name}")
+            self.logger.debug(f"🧪 plugin.py deviceStartComm() CALLED for {dev.name}")
             if self.Sonos is not None:
                 self.Sonos.deviceStartComm(dev)
 

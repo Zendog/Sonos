@@ -713,7 +713,7 @@
 
 			<Field id="sound_file" type="menu" visibleBindingId="ttsORfile" visibleBindingValue="FILE">
 				<Label>Sound File:</Label>
-				<List class="self" method="getZP_SoundFiles" dynamicReload="yes"/>
+				<List class="self" method="getSoundFilesList" dynamicReload="yes"/>
 			</Field>
 			<Field id="zp_volume" type="textfield">
 				<Label>Level (0-100):</Label>
