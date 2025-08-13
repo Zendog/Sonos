@@ -3062,13 +3062,51 @@ class SonosPlugin(object):
 
 
 
-
-
+    ############################################################################################
+    ### SiriusXM Generic Channel Changer and helpers based on only needing a GUID
+    ############################################################################################
 
     def channelUpOrDown(self, dev, direction):
         import re
 
-        self.logger.warning(f"⚠️ Determining next SiriusXM channel (using cached value)...")
+
+        # --- bootstrap cache so first XM hop works even after cold start ---
+        if not hasattr(self, "last_known_sxm_channel"):
+            self.last_known_sxm_channel = {}
+
+        # Try to seed from current device state if this zone isn't cached yet
+        zoneIP = dev.pluginProps.get("address")
+        if zoneIP and zoneIP not in self.last_known_sxm_channel:
+            # 1) Parse "CH N - Name" from ZP_STATION if available
+            try:
+                st = dev.states.get("ZP_STATION", "") or ""
+                m = re.search(r"\bCH\s+(\d{1,4})\b", st, re.IGNORECASE)
+                if m:
+                    self.last_known_sxm_channel[zoneIP] = int(m.group(1))
+            except Exception:
+                pass
+
+            # 2) If still unknown, try to pull GUID from current URI and map to a channel number
+            if zoneIP not in self.last_known_sxm_channel:
+                try:
+                    uri = (dev.states.get("ZP_CurrentTrackURI", "") or
+                           dev.states.get("ZP_AVTransportURI", "") or "")
+                    # look for "...channel-linear:<guid>..."
+                    gm = re.search(r"channel-linear[:%3a]([0-9a-fA-F-]{16,})", uri)
+                    if gm and getattr(self, "siriusxm_channels", None):
+                        guid = gm.group(1).lower()
+                        ch = next((c for c in self.siriusxm_channels
+                                   if str(c.get("guid", "")).lower() == guid), None)
+                        if ch and ch.get("channel_number") is not None:
+                            try:
+                                self.last_known_sxm_channel[zoneIP] = int(str(ch["channel_number"]).strip())
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                
+
+        self.logger.info(f"📝 Determining next SiriusXM channel (using cached value)...")
 
         try:
             zoneIP = dev.pluginProps.get("address")
@@ -3096,6 +3134,11 @@ class SonosPlugin(object):
                     continue
                 try:
                     clean_ch_num = int(str(raw_ch_num).strip())
+
+                    # ⛳ Minimal guard to avoid 19xx “team” feeds that can 402 on SetAVTransportURI
+                    if not (1 <= clean_ch_num <= 999):
+                        continue  # ← added filter; everything else remains unchanged
+
                     ch["channel_number"] = clean_ch_num  # Normalize in-place as int
                     valid_channels.append(ch)
                 except Exception:
@@ -3121,15 +3164,42 @@ class SonosPlugin(object):
                 None
             )
 
+            # If current channel isn't in the list (or cache got stale), clamp to edge per direction
             if current_index is None:
-                self.logger.warning(f"⚠️ Channel number {current_channel_number} not found in sorted channel list.")
+                if direction == "up":
+                    current_index = -1  # so +1 lands at 0 below
+                else:
+                    current_index = 0   # so -1 wraps to last below
+
+            # Compute initial next/prev candidate with wrap
+            if direction == "up":
+                next_index = (current_index + 1) % len(sorted_channels)
+            else:
+                next_index = (current_index - 1 + len(sorted_channels)) % len(sorted_channels)
+
+            # Robust selection: skip malformed/unplayable entries and avoid infinite loops
+            attempts = 0
+            chosen = None
+            idx = next_index
+            while attempts < len(sorted_channels):
+                cand = sorted_channels[idx]
+                cand_num = cand.get("channel_number")
+                cand_guid = cand.get("guid")
+                if cand_guid and isinstance(cand_num, int):
+                    chosen = cand
+                    break
+                # advance in requested direction with wrap
+                if direction == "up":
+                    idx = (idx + 1) % len(sorted_channels)
+                else:
+                    idx = (idx - 1 + len(sorted_channels)) % len(sorted_channels)
+                attempts += 1
+
+            if not chosen:
+                self.logger.error("❌ Could not find a valid next/previous SiriusXM channel to tune.")
                 return
 
-            # Compute next or previous
-            next_index = (current_index + 1) % len(sorted_channels) if direction == "up" else \
-                         (current_index - 1 + len(sorted_channels)) % len(sorted_channels)
-
-            next_channel = sorted_channels[next_index]
+            next_channel = chosen
             next_guid = next_channel.get("guid")
 
             self.logger.info(
@@ -3144,16 +3214,18 @@ class SonosPlugin(object):
             self.logger.error(f"❌ Failed to switch channel {direction} for {dev.name}: {e}")
 
 
-        
 
 
-
-
-
-
-    ############################################################################################
-    ### SiriusXM Generic Channel Changer based on only needing a GUID
-    ############################################################################################
+    def _is_benign_upnp_402(self, err_obj) -> bool:
+        """
+        Returns True if the exception looks like the known-benign UPnP 402 'Invalid Args'
+        we see when sending custom SiriusXM URIs. These often still succeed.
+        """
+        try:
+            s = str(err_obj) if err_obj is not None else ""
+            return ("UPnPError" in s) and ("402" in s or "Invalid Args" in s or "errorCode>402<" in s)
+        except Exception:
+            return False
 
 
     def SiriusXMChannelChanger(self, dev, guid):
@@ -3215,6 +3287,31 @@ class SonosPlugin(object):
                 soco_dev.play()
 
             except Exception as upnp_err:
+                # --- inserted: treat UPnP 402 "Invalid Args" as benign for custom SXM URIs ---
+                err = str(upnp_err) if upnp_err is not None else ""
+                is_402 = (
+                    "UPnPError" in err and (
+                        "402" in err or
+                        "Invalid Args" in err or
+                        "errorCode>402<" in err
+                    )
+                )
+                if is_402:
+                    # Log once per device at debug (or comment this out to be completely silent)
+                    seen = getattr(self, "_saw_sxm_402", set())
+                    if dev.id not in seen:
+                        self.logger.debug(f"⚠️ Trapped benign UPnP 402 for {dev.name}; continuing without error.")
+                        seen.add(dev.id)
+                        self._saw_sxm_402 = seen
+                    # Nudge playback; many players already applied the URI
+                    try:
+                        soco_dev.play()
+                    except Exception as play_err:
+                        self.logger.debug(f"⏯️ Post-402 play retry hiccup on {dev.name}: {play_err}")
+                    return  # Skip further state updates on this pass; transport will typically proceed
+                # --- end inserted 402 guard ---
+
+                # (existing error logging retained for non-402 cases)
                 self.logger.error(f"❌ UPNP Error: {upnp_err}")
                 self.logger.error(f"❌ Offending Command -> zoneIP: {zoneIP}, URI: {uri}")
                 self.logger.error(f"📦 Metadata Sent:\n{metadata}")
@@ -3237,8 +3334,9 @@ class SonosPlugin(object):
 
             try:
                 clean_ch_num = int(str(channel.get("channel_number", 0)).strip())
-                self.last_known_sxm_channel[dev.id] = clean_ch_num
-                self.logger.info(f"💾 Saved last known SiriusXM channel {clean_ch_num} for device {dev.name}")
+                # NOTE: key by zoneIP so channelUpOrDown() can read it (it looks up by IP)
+                self.last_known_sxm_channel[zoneIP] = clean_ch_num
+                self.logger.info(f"💾 Saved last known SiriusXM channel {clean_ch_num} for zone {zoneIP}")
             except Exception:
                 self.logger.warning(f"⚠️ Could not parse and save channel_number for {dev.name}")
 
@@ -3247,7 +3345,70 @@ class SonosPlugin(object):
 
 
 
-            
+
+
+
+
+    def _cache_sxm_channel(self, dev=None, zoneIP=None, channel_number=None):
+        """
+        Save last-known SiriusXM channel using both dev.id and IP keys (when available).
+        Keeps compatibility with code that reads either key.
+        """
+        if channel_number is None:
+            return
+        try:
+            ch = int(str(channel_number).strip())
+        except Exception:
+            return
+
+        if not hasattr(self, "last_known_sxm_channel") or not isinstance(self.last_known_sxm_channel, dict):
+            self.last_known_sxm_channel = {}
+
+        if dev is not None:
+            # by device id
+            try:
+                self.last_known_sxm_channel[dev.id] = ch
+            except Exception:
+                pass
+            # by IP (if we can get it)
+            try:
+                ip = (dev.pluginProps.get("address") or getattr(dev, "address", None) or "").strip()
+                if ip:
+                    self.last_known_sxm_channel[ip] = ch
+            except Exception:
+                pass
+        elif zoneIP:
+            self.last_known_sxm_channel[zoneIP] = ch
+
+
+
+    def _get_cached_sxm_channel(self, dev=None, zoneIP=None):
+        """
+        Retrieve last-known SiriusXM channel; prefer dev.id, then IP.
+        Returns int or None.
+        """
+        d = getattr(self, "last_known_sxm_channel", None)
+        if not isinstance(d, dict):
+            return None
+
+        # by device id
+        if dev is not None and dev.id in d:
+            return d[dev.id]
+
+        # by IP
+        ip = None
+        try:
+            ip = zoneIP or (dev.pluginProps.get("address") if dev else None) or (getattr(dev, "address", None) if dev else None)
+        except Exception:
+            ip = zoneIP
+
+        if ip in d:
+            return d[ip]
+
+        return None
+
+
+                
 
     ############################################################################################
 
@@ -3330,89 +3491,46 @@ class SonosPlugin(object):
 
 
 
-
     def sendSiriusXMChannel(self, zoneIP, channel_guid, channel_name):
-        import urllib.parse
-
+        """
+        Compatibility wrapper: resolve Indigo device from zoneIP and delegate to SiriusXMChannelChanger().
+        Keeps existing call sites working while unifying the logic in one place.
+        """
         try:
             self.logger.info("🔁 Entered sendSiriusXMChannel()")
 
             if not zoneIP:
                 self.logger.error("❌ No zoneIP provided for sendSiriusXMChannel")
                 return
-
             if not channel_guid:
                 self.logger.warning(f"⚠️ No SiriusXM GUID provided for zone {zoneIP}")
                 return
 
-            if not channel_name:
-                self.logger.warning(f"⚠️ No SiriusXM channel name provided for zone {zoneIP}")
+            # Resolve Indigo device by IP
+            dev = None
+            cached = self.ip_to_indigo_device.get(zoneIP)
+            if isinstance(cached, indigo.Device):
+                dev = cached
+            elif isinstance(cached, int):
+                dev = indigo.devices.get(cached)
 
-            # Build HTML-safe encoded URI
-            encoded_guid = urllib.parse.quote(channel_guid)
-            uri = f"x-sonosapi-hls:channel-linear%3a{encoded_guid}?sid=37&amp;flags=8232&amp;sn=3"
+            if not dev:
+                # If we can’t resolve, fall back to SoCo directly but still use RAW payloads + 402 suppression
+                self.logger.warning(f"⚠️ Could not resolve Indigo device for {zoneIP}; falling back to direct send.")
+                # Build a fake, lightweight device-like shim with minimal props needed
+                class _Shim:
+                    name = f"(IP {zoneIP})"
+                    pluginProps = {"address": zoneIP}
+                    def updateStateOnServer(*args, **kwargs): pass
+                    id = f"ip:{zoneIP}"
+                return self.SiriusXMChannelChanger(_Shim, channel_guid)
 
-            # HTML-safe metadata
-            metadata = (
-                '&lt;DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" '
-                'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" '
-                'xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" '
-                'xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"&gt;'
-                f'&lt;item id="channel-linear:{channel_guid}" parentID="0" restricted="true"&gt;'
-                f'&lt;dc:title&gt;{channel_name}&lt;/dc:title&gt;'
-                '&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;'
-                '&lt;desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/"&gt;'
-                'SA_RINCON6_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;'
-            )
-
-            self.safe_debug(f"📡 Sending SiriusXM stream to {zoneIP}")
-            self.safe_debug(f"🔗 CurrentURI: {uri}")
-            self.safe_debug(f"🧾 CurrentURIMetaData:\n{metadata}")
-
-            # Set the stream URI
-            self.SOAPSend(
-                zoneIP,
-                "/MediaRenderer",
-                "/AVTransport",
-                "SetAVTransportURI",
-                f"<CurrentURI>{uri}</CurrentURI><CurrentURIMetaData>{metadata}</CurrentURIMetaData>"
-            )
-
-            # Play the stream
-            self.logger.debug("▶️ Play payload: <Speed>1</Speed>")
-            self.SOAPSend(
-                zoneIP,
-                "/MediaRenderer",
-                "/AVTransport",
-                "Play",
-                "<Speed>1</Speed>"
-            )
-
-            self.logger.info(f"🎶 Sent SiriusXM channel {channel_name} to {zoneIP}")
-
-            # --- Save last known SiriusXM channel for the zoneIP ---
-            if not hasattr(self, "last_known_sxm_channel"):
-                self.last_known_sxm_channel = {}
-
-            # 🔎 Find channel number if possible from self.siriusxm_channels
-            matched_channel = next(
-                (ch for ch in self.siriusxm_channels if ch.get("guid", "").lower().strip() == channel_guid.lower().strip()),
-                None
-            )
-
-            if matched_channel:
-                ch_num = matched_channel.get("channel_number")
-                if ch_num:
-                    try:
-                        clean_ch_num = int(str(ch_num).strip())
-                        # We'll track by IP address here, not dev.id (because we don't have dev in this function)
-                        self.last_known_sxm_channel[zoneIP] = clean_ch_num
-                        self.logger.info(f"💾 Saved last known SiriusXM channel {clean_ch_num} for zone {zoneIP}")
-                    except Exception:
-                        self.logger.warning(f"⚠️ Could not parse channel_number for {zoneIP}")
+            # Delegate to the single source of truth
+            return self.SiriusXMChannelChanger(dev, channel_guid)
 
         except Exception as e:
             self.logger.error(f"❌ Failed to send SiriusXM channel {channel_name}: {e}")
+
 
 
 
@@ -6760,7 +6878,6 @@ class SonosPlugin(object):
 ### Evaluate_and_update_grouped_states
 #################################################################################################
 
-
     def evaluate_and_update_grouped_states(self, dev=None):
         now = time.time()
         if hasattr(self, "_last_group_eval") and now - self._last_group_eval < 3.0:
@@ -6800,40 +6917,86 @@ class SonosPlugin(object):
                 continue
             seen_groups.add(group_uid)
 
+            # --- BEGIN: robust coordinator/members resolution (added) ---
+            # Try to resolve coordinator by UUID via SoCo, but fall back to cached dict info if needed.
             coordinator_uuid = coordinator_entry.get("uuid") if isinstance(coordinator_entry, dict) else coordinator_entry
             coordinator = self.get_soco_by_uuid(coordinator_uuid)
 
-            if not coordinator:
-                self.logger.debug(f"⚠️ 1st Could not resolve SoCo coordinator for UUID: {coordinator_uuid}")
-                continue
+            # Normalize members into a list of dicts with name/ip/bonded/is_coord and optional soco
+            from types import SimpleNamespace
+            norm_members = []
+            ip_to_is_coord = {}
 
-            members = []
             for entry in member_entries:
-                member_uuid = entry.get("uuid") if isinstance(entry, dict) else entry
-                soco_dev = self.get_soco_by_uuid(member_uuid)
-                if soco_dev:
-                    members.append(soco_dev)
+                if isinstance(entry, dict):
+                    m_uuid = entry.get("uuid")
+                    m_ip   = entry.get("ip")
+                    m_name = entry.get("name") or entry.get("zone_name") or ""
+                    m_bond = bool(entry.get("bonded", False))
+                    m_is_c = bool(entry.get("coordinator", False))
                 else:
-                    self.logger.debug(f"⚠️ Could not resolve SoCo device for UUID: {entry}")
+                    # legacy: bare UUID string
+                    m_uuid = entry
+                    m_ip, m_name, m_bond, m_is_c = None, "", False, False
+
+                m_soco = None
+                if m_uuid:
+                    m_soco = self.get_soco_by_uuid(m_uuid)
+                if (m_soco is None) and m_ip:
+                    m_soco = self.soco_by_ip.get(m_ip)
+
+                norm_members.append({
+                    "uuid": m_uuid,
+                    "ip": m_ip,
+                    "name": m_name,
+                    "bonded": m_bond,
+                    "is_coord": m_is_c,
+                    "soco": m_soco,
+                })
+                if m_ip:
+                    ip_to_is_coord[m_ip] = m_is_c
+
+            # If SoCo coordinator not found, try to pick the coordinator from members by cache flag
+            if coordinator is None:
+                for m in norm_members:
+                    if m["is_coord"] and m["soco"] is not None:
+                        coordinator = m["soco"]
+                        break
+
+            # Build the 'members' list as SoCo-like objects so the rest of your code can remain unchanged
+            members = []
+            for m in norm_members:
+                if m["soco"] is not None:
+                    members.append(m["soco"])
+                else:
+                    # lightweight proxy with .player_name and .ip_address
+                    members.append(SimpleNamespace(player_name=m["name"] or "", ip_address=m["ip"] or ""))
 
             if not members:
                 self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
                 continue
+            # --- END: robust coordinator/members resolution (added) ---
 
             # 🔍 Evaluate non-bonded members
             non_bonded_members = [
                 m for m in members
-                if not any(b in m.player_name.lower() for b in bonded_names)
+                if not any(b in (m.player_name or "").lower() for b in bonded_names)
             ]
-            unique_names = set(m.player_name.lower() for m in non_bonded_members)
+            unique_names = set((m.player_name or "").lower() for m in non_bonded_members)
 
             # ✅ Determine grouped status — TRUE only if more than one *non-bonded* member
             is_grouped = len(unique_names) > 1
 
             if not is_grouped:
-                self.logger.debug(f"🧩 Not grouped: {coordinator.player_name} — fewer than 2 unique non-bonded members")
+                # If we didn't resolve a coordinator SoCo object, use the first member's name for logging
+                base_name = coordinator.player_name if coordinator else (members[0].player_name if members else "(unknown)")
+                self.logger.debug(f"🧩 Not grouped: {base_name} — fewer than 2 unique non-bonded members")
 
-            group_name = coordinator.player_name if is_grouped else members[0].player_name
+            # Prefer the coordinator’s friendly name if known, else first member name
+            if coordinator:
+                group_name = coordinator.player_name if is_grouped else members[0].player_name
+            else:
+                group_name = members[0].player_name
 
             # 🧠 Initialize tracking for this group
             if group_name not in self.evaluated_group_members_by_coordinator:
@@ -6841,7 +7004,7 @@ class SonosPlugin(object):
                 self.evaluated_group_members_by_coordinator[group_name] = []
 
             for member in members:
-                member_ip = member.ip_address.strip()
+                member_ip = (member.ip_address or "").strip()
                 indigo_device = self.ip_to_indigo_device.get(member_ip)
                 if not indigo_device:
                     self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
@@ -6852,7 +7015,9 @@ class SonosPlugin(object):
                     continue
 
                 expected_grouped = "true" if is_grouped else "false"
-                expected_coord = "true" if member == coordinator else "false"
+
+                # --- changed: coordinator flag based on cached flag by IP (instead of object identity) ---
+                expected_coord = "true" if ip_to_is_coord.get(member_ip, False) else "false"
 
                 grouped_val = indigo_device.states.get("Grouped", "undefined")
                 coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
@@ -7007,6 +7172,8 @@ class SonosPlugin(object):
                 self.updateStateOnServer(dev, "GROUP_Coordinator", "false")
 
 
+
+                
 
 
 #################################################################################################
