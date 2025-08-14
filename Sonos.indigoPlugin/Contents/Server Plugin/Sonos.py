@@ -578,7 +578,7 @@ class SonosPlugin(object):
                                           "SetAVTransportURI",
                                           f"<CurrentURI>x-rincon-queue:{dev.states['ZP_LocalUID']}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                             #DT_Test
-                            self.logger.warning(f"DT_Test")
+                            self.logger.warning(f"Lets build group coordinator tracker directlly from SOCO UUID ... DT_Test")
                             self.refresh_group_topology_after_plugin_zone_change()
                             self.refresh_all_group_states()
                             self.evaluate_and_update_grouped_states()
@@ -1220,7 +1220,7 @@ class SonosPlugin(object):
                     self.refresh_all_group_states()
 
                 self.refresh_all_group_states()
-                self.logger.info(f"✅ tried refresh at end of add ???? ")
+                self.logger.info(f"✅ tried refresh at end of 1st add to set base cache ???? ")
                 return
 
             elif action_id == "setStandalone":
@@ -2963,9 +2963,6 @@ class SonosPlugin(object):
 
 
 
-
-
-
     def refresh_all_group_states(self):
         """
         Refresh and evaluate current Sonos zone groups using the SoCo .group property.
@@ -2995,10 +2992,25 @@ class SonosPlugin(object):
                         continue
                     seen_members.add(member_uuid)
 
-                    zone_name = member.player_name.lower()
+                    zone_name = (member.player_name or "").lower()
                     if "sub" in zone_name:
                         #self.logger.debug(f"🚫 Skipping bonded sub: {zone_name}")
                         continue
+
+                    # --- DEBUG PROBE: compare live vs UUID-based coordinator detection (safe) ---
+                    try:
+                        live_is_coord = bool(getattr(member, "is_coordinator", False)) or \
+                                        (str(member_uuid) == str(group.coordinator.uid))
+                        self.logger.debug(
+                            f"refresh_probe name={member.player_name} "
+                            f"uid={member_uuid} "
+                            f"group_coord_uid={group.coordinator.uid} "
+                            f"live_is_coord={live_is_coord} "
+                            f"eq_by_uuid={(str(member_uuid) == str(group.coordinator.uid))}"
+                        )
+                    except Exception:
+                        pass
+                    # --- END DEBUG PROBE ---
 
                     groups[group_id]["members"].append({
                         "uuid": member_uuid,
@@ -3006,7 +3018,8 @@ class SonosPlugin(object):
                         "zone_name": zone_name,
                         "name": member.player_name,
                         "ip": member.ip_address,
-                        "coordinator": member == group.coordinator,
+                        # Use UUID equality, not object equality, to mark coordinator
+                        "coordinator": (str(member_uuid) == str(group.coordinator.uid)),
                         "bonded": "sub" in zone_name  # refine if needed
                     })
 
@@ -3016,7 +3029,7 @@ class SonosPlugin(object):
         self.zone_group_state_cache = groups
         #self.logger.info(f"💾 zone_group_state_cache updated 3 with {len(groups)} group(s)")
         self.refresh_group_topology_after_plugin_zone_change()
-        self.logger.debug("🔁 Exiting Refresh_all_group_states")        
+        self.logger.debug("🔁 Exiting Refresh_all_group_states")
         #self.evaluate_and_update_grouped_states()
 
 
@@ -6970,7 +6983,9 @@ class SonosPlugin(object):
                     members.append(m["soco"])
                 else:
                     # lightweight proxy with .player_name and .ip_address
-                    members.append(SimpleNamespace(player_name=m["name"] or "", ip_address=m["ip"] or ""))
+                    # NEW: include uid so later coordinator equality check works
+                    members.append(SimpleNamespace(player_name=m["name"] or "", ip_address=m["ip"] or "", uid=m["uuid"]))
+                    # (all other behavior unchanged)
 
             if not members:
                 self.logger.warning(f"⚠️ Group {group_uid} has no resolvable members — skipping.")
@@ -7016,8 +7031,39 @@ class SonosPlugin(object):
 
                 expected_grouped = "true" if is_grouped else "false"
 
-                # --- changed: coordinator flag based on cached flag by IP (instead of object identity) ---
-                expected_coord = "true" if ip_to_is_coord.get(member_ip, False) else "false"
+            for member in members:
+                member_ip = (member.ip_address or "").strip()
+                indigo_device = self.ip_to_indigo_device.get(member_ip)
+                if not indigo_device:
+                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
+                    continue
+
+                if dev and dev.id != indigo_device.id:
+                    self.logger.debug(f"⏭ Skipping {indigo_device.name} due to dev filter (looking for ID {dev.id})")
+                    continue
+
+                expected_grouped = "true" if is_grouped else "false"
+
+                # --- DEBUG PROBE: live-vs-uuid coordinator check (safe for proxies) ---
+                try:
+                    live_is_coord = bool(getattr(member, "is_coordinator", False))
+                    m_uuid = getattr(member, "uid", None)
+                    self.logger.debug(
+                        f"coord_check name={member.player_name} "
+                        f"m_uuid={m_uuid} "
+                        f"coordinator_uuid={coordinator_uuid} "
+                        f"live_is_coord={live_is_coord} "
+                        f"expected_by_uuid={(str(m_uuid) == str(coordinator_uuid))}"
+                    )
+                except Exception:
+                    pass
+                # --- END DEBUG PROBE ---
+
+
+                # --- changed: coordinator flag based on UUID equality (object identity can be unreliable) ---
+                member_uuid = getattr(member, "uid", None)
+                # NEW: normalize both sides to strings for reliable comparison
+                expected_coord = "true" if (member_uuid is not None and coordinator_uuid is not None and str(member_uuid) == str(coordinator_uuid)) else "false"
 
                 grouped_val = indigo_device.states.get("Grouped", "undefined")
                 coord_val = indigo_device.states.get("GROUP_Coordinator", "undefined")
