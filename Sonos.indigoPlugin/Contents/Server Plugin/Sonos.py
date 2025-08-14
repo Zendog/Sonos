@@ -7018,19 +7018,7 @@ class SonosPlugin(object):
                 self.logger.debug(f"📦 Initializing group entry for '{group_name}' in evaluated_group_members_by_coordinator")
                 self.evaluated_group_members_by_coordinator[group_name] = []
 
-            for member in members:
-                member_ip = (member.ip_address or "").strip()
-                indigo_device = self.ip_to_indigo_device.get(member_ip)
-                if not indigo_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
-                    continue
-
-                if dev and dev.id != indigo_device.id:
-                    self.logger.debug(f"⏭ Skipping {indigo_device.name} due to dev filter (looking for ID {dev.id})")
-                    continue
-
-                expected_grouped = "true" if is_grouped else "false"
-
+            # -------- Single per-member loop (keeps all original behavior) --------
             for member in members:
                 member_ip = (member.ip_address or "").strip()
                 indigo_device = self.ip_to_indigo_device.get(member_ip)
@@ -7058,7 +7046,6 @@ class SonosPlugin(object):
                 except Exception:
                     pass
                 # --- END DEBUG PROBE ---
-
 
                 # --- changed: coordinator flag based on UUID equality (object identity can be unreliable) ---
                 member_uuid = getattr(member, "uid", None)
@@ -7099,6 +7086,7 @@ class SonosPlugin(object):
                 # ✅ Add to plugin-evaluated group tracking dict
                 self.logger.debug(f"✅ Adding {indigo_device.name} to evaluated group '{group_name}'")
                 self.evaluated_group_members_by_coordinator[group_name].append(indigo_device)
+            # ---------------- end single per-member loop ----------------
 
         # ✅ Consolidated bonded device injection to ensure visibility in dump_groups_to_log()
         for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
@@ -7218,7 +7206,7 @@ class SonosPlugin(object):
                 self.updateStateOnServer(dev, "GROUP_Coordinator", "false")
 
 
-
+            
                 
 
 
