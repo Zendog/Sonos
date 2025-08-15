@@ -416,7 +416,7 @@ class SonosPlugin(object):
         self.device_zone_ips = {}
         self.parsed_zone_group_state_by_ip = {}
 
-
+        self._eval_coord_dev_by_ip = {}
         self.soco_by_dev = {}
 
         for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
@@ -2764,7 +2764,6 @@ class SonosPlugin(object):
     ### Dump Groups To Log by logical group
     ############################################################################################
 
-
     def dump_by_logical_group(self):
         """
         Dumps the plugin-evaluated logical group state summary.
@@ -2791,6 +2790,19 @@ class SonosPlugin(object):
             self.logger.info("-" * summary_total_width)
 
             for indigo_dev in sorted(dev_list, key=lambda d: d.name.lower()):
+                # 🔬 Drift check (diagnostic only; no behavior change)
+                try:
+                    live_dev = indigo.devices[indigo_dev.id]
+                    cached_g = indigo_dev.states.get("Grouped", "?")
+                    live_g   = live_dev.states.get("Grouped", "?")
+                    if cached_g != live_g:
+                        self.logger.warning(
+                            f"🧪 Drift: {indigo_dev.name} cached_Grouped='{cached_g}' "
+                            f"current_Grouped='{live_g}' cached_obj_id={id(indigo_dev)} live_obj_id={id(live_dev)}"
+                        )
+                except Exception:
+                    pass
+
                 is_coord = indigo_dev.states.get("GROUP_Coordinator", "false") == "true"
                 role = "Master (Coordinator)" if is_coord else "Slave"
                 bonded = "sub" in indigo_dev.name.lower()
@@ -2814,6 +2826,8 @@ class SonosPlugin(object):
                 ))
 
             self.logger.info("")
+
+
 
 
     ############################################################################################
@@ -2915,6 +2929,9 @@ class SonosPlugin(object):
     ############################################################################################
     ### Dump Groups To Log - All three
     ############################################################################################
+    ############################################################################################
+    ### Dump Groups To Log - All three
+    ############################################################################################
     def dump_groups_to_log(self):
         """
         Wrapper method to dump full Sonos group state using all perspectives:
@@ -2923,6 +2940,15 @@ class SonosPlugin(object):
         3. dump_by_inventory()     — Full inventory audit of all Sonos Indigo devices
         """
         self.logger.info("🗂️ Starting full group state dump (Sonos + Plugin view)...")
+
+        # Run evaluation first so we have fresh plugin-evaluated states
+        self.evaluate_and_update_grouped_states()
+
+        # 🔍 Pre-check — log each device's current Grouped state from Indigo
+        #self.logger.warning("⚠️ Pre-dump: Current Indigo device 'Grouped' values (post evaluation):")
+        #for dev in indigo.devices.iter("self"):
+        #    grouped_val = dev.states.get("Grouped", None)
+        #    self.logger.warning(f"   {dev.name} — Grouped = {grouped_val!r}")
 
         full_separator = "─" * 179
 
@@ -2937,6 +2963,9 @@ class SonosPlugin(object):
         self.logger.info("\n" + full_separator + "\n")
 
         self.logger.info("✅ Group state dump complete.")
+
+
+
 
 
 
@@ -2963,6 +2992,8 @@ class SonosPlugin(object):
 
 
 
+
+
     def refresh_all_group_states(self):
         """
         Refresh and evaluate current Sonos zone groups using the SoCo .group property.
@@ -2973,7 +3004,53 @@ class SonosPlugin(object):
         groups = {}
         seen_members = set()
 
-        for ip, soco in self.soco_by_ip.items():
+        # NEW: build a coordinator-by-IP map for downstream use (e.g., evaluate_and_update_grouped_states)
+        # Ensure the instance attribute exists and start from it (in case other paths populated it)
+        if not hasattr(self, "_eval_coord_dev_by_ip") or not isinstance(getattr(self, "_eval_coord_dev_by_ip"), dict):
+            self._eval_coord_dev_by_ip = {}
+        _eval_coord_dev_by_ip = {}  # fresh build each pass
+
+        # NEW: also track grouped state per coordinator IP (purely plugin logical; optional)
+        if not hasattr(self, "_eval_grouped_by_coord_ip") or not isinstance(getattr(self, "_eval_grouped_by_coord_ip"), dict):
+            self._eval_grouped_by_coord_ip = {}
+        _eval_grouped_by_coord_ip = {}
+
+        # ─────────────────────────────────────────────────────────────────────────────
+        # PASS 1: Walk every SoCo group and record coordinator→IP→Indigo device mapping
+        # ─────────────────────────────────────────────────────────────────────────────
+        for loop_ip, soco in self.soco_by_ip.items():
+            try:
+                group = soco.group
+                if not group or not group.coordinator:
+                    continue
+
+                coord = group.coordinator
+                coord_ip = (getattr(coord, "ip_address", "") or "").strip()
+                if not coord_ip:
+                    coord_ip = (loop_ip or "").strip()
+
+                if not coord_ip:
+                    self.logger.warning(f"[coord-skip] Missing coordinator IP for group uid={getattr(coord, 'uid', '(unknown)')}")
+                    continue
+
+                # Map coordinator IP → Indigo device (IP-only policy)
+                indigo_dev = self.ip_to_indigo_device.get(coord_ip)
+                _eval_coord_dev_by_ip[coord_ip] = indigo_dev
+
+                # DEBUG/WARN so we can see it happening
+                #self.logger.warning(f"🌐 PASS1 mapped coordinator: uid={getattr(coord,'uid',None)} ip={coord_ip} dev={(indigo_dev.name if indigo_dev else '(none)')}")
+
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed PASS1 mapping for {loop_ip}: {e}")
+
+        # ─────────────────────────────────────────────────────────────────────────────
+        # PASS 2: Build groups cache (include ALL members, including subs)
+        #        NOTE: decide Grouped ONCE per coordinator after the loop to avoid
+        #        flip-flops when the same group is seen multiple times in this pass.
+        # ─────────────────────────────────────────────────────────────────────────────
+        coord_nonbonded_max = {}  # coord_ip -> max(non_bonded_count) seen across loop iterations
+
+        for loop_ip, soco in self.soco_by_ip.items():
             try:
                 group = soco.group
                 if not group or not group.coordinator:
@@ -2986,6 +3063,9 @@ class SonosPlugin(object):
                         "members": [],
                     }
 
+                # Count members (non-bonded vs bonded purely informational)
+                non_bonded_count = 0
+
                 for member in group.members:
                     member_uuid = member.uid
                     if member_uuid in seen_members:
@@ -2993,44 +3073,67 @@ class SonosPlugin(object):
                     seen_members.add(member_uuid)
 
                     zone_name = (member.player_name or "").lower()
-                    if "sub" in zone_name:
-                        #self.logger.debug(f"🚫 Skipping bonded sub: {zone_name}")
-                        continue
 
-                    # --- DEBUG PROBE: compare live vs UUID-based coordinator detection (safe) ---
-                    try:
-                        live_is_coord = bool(getattr(member, "is_coordinator", False)) or \
-                                        (str(member_uuid) == str(group.coordinator.uid))
-                        self.logger.debug(
-                            f"refresh_probe name={member.player_name} "
-                            f"uid={member_uuid} "
-                            f"group_coord_uid={group.coordinator.uid} "
-                            f"live_is_coord={live_is_coord} "
-                            f"eq_by_uuid={(str(member_uuid) == str(group.coordinator.uid))}"
-                        )
-                    except Exception:
-                        pass
-                    # --- END DEBUG PROBE ---
+                    # IP-only: always get an IP; fall back to loop ip if needed
+                    member_ip = (getattr(member, "ip_address", "") or "").strip()
+                    if not member_ip:
+                        member_ip = (loop_ip or "").strip()
+
+                    is_coord = (str(member_uuid) == str(group.coordinator.uid))
+                    is_bonded = any(k in zone_name for k in ("sub", "left", "right", "surround"))
 
                     groups[group_id]["members"].append({
                         "uuid": member_uuid,
-                        "location": member.ip_address,
+                        "location": member_ip,
                         "zone_name": zone_name,
                         "name": member.player_name,
-                        "ip": member.ip_address,
-                        # Use UUID equality, not object equality, to mark coordinator
-                        "coordinator": (str(member_uuid) == str(group.coordinator.uid)),
-                        "bonded": "sub" in zone_name  # refine if needed
+                        "ip": member_ip,
+                        # Use UUID equality, not object identity, to mark coordinator
+                        "coordinator": is_coord,
+                        "bonded": is_bonded
                     })
 
-            except Exception as e:
-                self.logger.warning(f"⚠️ Failed to evaluate group for {ip}: {e}")
+                    if not is_bonded:
+                        non_bonded_count += 1
 
+                    # DEBUG/WARN row so we can watch exactly what we add
+                    #self.logger.warning(
+                    #    f"🧩 PASS2 add member: group={group_id} name='{member.player_name}' "
+                    #    f"ip={member_ip} uuid={member_uuid} coord={is_coord} bonded={is_bonded}"
+                    #)
+
+                # Record the strongest view of non-bonded count per coordinator IP during this pass.
+                coord_ip = (getattr(group.coordinator, "ip_address", "") or loop_ip or "").strip()
+                if coord_ip:
+                    prev = coord_nonbonded_max.get(coord_ip, 0)
+                    # take the max to avoid later partial/filtered iterations downgrading the count
+                    coord_nonbonded_max[coord_ip] = max(prev, non_bonded_count)
+
+                    # (moved final grouped decision to a separate finalize step below)
+
+            except Exception as e:
+                self.logger.warning(f"⚠️ Failed PASS2 building for {loop_ip}: {e}")
+
+        # FINALIZE grouped decision once per coordinator IP (prevents true→false overwrite)
+        for coord_ip, nb_count in coord_nonbonded_max.items():
+            grouped_val = "true" if nb_count > 1 else "false"
+            _eval_grouped_by_coord_ip[coord_ip] = grouped_val
+            #self.logger.warning(f"📏 PASS2 grouped decision (final): coord_ip={coord_ip} non_bonded={nb_count} → {grouped_val}")
+
+        # Persist results to the instance
         self.zone_group_state_cache = groups
-        #self.logger.info(f"💾 zone_group_state_cache updated 3 with {len(groups)} group(s)")
-        self.refresh_group_topology_after_plugin_zone_change()
+        self._eval_coord_dev_by_ip = _eval_coord_dev_by_ip
+        self._eval_grouped_by_coord_ip = _eval_grouped_by_coord_ip
+
+        # Final visibility
+        self.logger.warning(f"💾 zone_group_state_cache groups={len(groups)} coord_ip_map={len(_eval_coord_dev_by_ip)}")
+
         self.logger.debug("🔁 Exiting Refresh_all_group_states")
         #self.evaluate_and_update_grouped_states()
+
+
+
+
 
 
 
@@ -6599,8 +6702,28 @@ class SonosPlugin(object):
             self.exception_handler(exception_error, True)  # Log error and display failing statement
 
     def restoreString(self, in_string, filter):
+        """
+        Normalize Sonos strings safely from bytes/None and replace common entities.
+        Always returns a str. (Note: parameter name 'filter' shadows the built-in.)
+        """
         try:
-            in_string = in_string.replace("&amp;apos;", "\'")
+            # Guard against None
+            if in_string is None:
+                return ""
+
+            # Decode bytes -> str
+            if isinstance(in_string, (bytes, bytearray)):
+                try:
+                    in_string = in_string.decode("utf-8", errors="ignore")
+                except Exception:
+                    in_string = in_string.decode("latin-1", errors="ignore")
+
+            # Coerce other types to str (e.g., ints)
+            if not isinstance(in_string, str):
+                in_string = str(in_string)
+
+            # 🔽 Your existing logic preserved
+            in_string = in_string.replace("&amp;apos;", "'")
             if filter == 0:
                 in_string = in_string.replace("&amp;amp;", "&")
                 in_string = in_string.replace("&amp;", "&")
@@ -6608,20 +6731,18 @@ class SonosPlugin(object):
             in_string = in_string.replace("&lt;", "<")
             in_string = in_string.replace("&gt;", ">")
             in_string = in_string.replace("&apos;", "'")
+
             return in_string
 
         except Exception as exception_error:
             self.exception_handler(exception_error, True)  # Log error and display failing statement
+            # Fail-safe return to avoid propagating NoneType further
+            try:
+                return str(in_string) if in_string is not None else ""
+            except Exception:
+                return ""
 
-    def logSep(self, debug):
-        try:
-            if debug:
-                self.safe_debug("---------------------------------------------")
-            else:
-                self.logger.info("---------------------------------------------")
 
-        except Exception as exception_error:
-            self.exception_handler(exception_error, True)  # Log error and display failing statement
 
 
 
@@ -7023,7 +7144,7 @@ class SonosPlugin(object):
                 member_ip = (member.ip_address or "").strip()
                 indigo_device = self.ip_to_indigo_device.get(member_ip)
                 if not indigo_device:
-                    self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
+                    #self.logger.warning(f"⚠️ No Indigo device found for {member.player_name} ({member_ip}) — skipping")
                     continue
 
                 if dev and dev.id != indigo_device.id:
@@ -7130,13 +7251,81 @@ class SonosPlugin(object):
                 )
                 self.zone_group_state_cache[group_name]["members"].append(dev_id)
 
-        # 🎯 Post-pass to align bonded Sub grouped flag with its coordinator
+#        # 🎯 Post-pass to align bonded Sub grouped flag with its coordinator
+#        for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
+#            if not dev or "sub" not in dev.name.lower():
+#                name, number, ver, ip, uuid = self.get_model_meta(dev)
+#                self.logger.warning(f"{dev.name}: model={name} number={number} ver={ver} ip={ip} uuid={uuid}")
+#                #self.logger.warning(f"⚠️ Could not find sub in the name .... This name '{dev.name}' this current group '{sub_group}'")
+#                self.logger.warning(f"⚠️ Could not find sub in the name .... This name '{dev.name}")
+#                continue
+
+        # 🎯 Post-pass to align bonded Sub grouped flag with its coordinator (IP-only)
+        # 📊 DO NOT REMOVE — All-devices IP-only diagnostic pass (restores original visibility)
+
+        # 🔎 Instrument every Indigo Sonos device (IP-only path)
         for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
-            if not dev or "sub" not in dev.name.lower():
-                continue
+            # Get IP only from props (strict IP policy)
+            ip = ""
+            try:
+                ip = (dev.pluginProps.get("address", "") or "").strip()
+            except Exception:
+                ip = ""
+
+            # Resolve SoCo purely by IP
+            soco = self.soco_by_ip.get(ip) if ip else None
+            live_group = getattr(soco, "group", None) if soco else None
+            live_coord = getattr(live_group, "coordinator", None) if live_group else None
+            live_name  = getattr(live_coord, "player_name", "") if live_coord else ""
+            lg_uid     = getattr(live_group, "uid", None) if live_group else None
+            lc_uid     = getattr(live_coord, "uid", None) if live_coord else None
+
+            # Minimal model/uuid (optional; still IP-only semantics)
+            try:
+                model, number, ver, _, uuid = self.get_model_meta(dev)
+            except Exception:
+                model, number, ver, uuid = "Unknown", "Unknown", "Unknown", "Unknown"
+
+            grp_name = dev.states.get("GROUP_Name", "") or ""
+
+            # 🔔 Diagnostic line for every device
+            #self.logger.warning(
+            #    f"📋 Device info: {dev.name} model={model} number={number} ver={ver} "
+            #    f"ip={ip or '(unknown)'} uuid={uuid or 'Unknown'} "
+            #    f"live_group={lg_uid if lg_uid else 'None'} live_coord={lc_uid if lc_uid else 'None'} "
+            #    f"live_name='{live_name}' group_name='{grp_name or '(empty)'}'"
+            #)
+
+            # 🛠 Normalize raw ZoneGroupTopology IDs in GROUP_Name to friendly coordinator name (IP-only source of truth)
+            try:
+                looks_like_raw = grp_name.startswith("RINCON_") or (":" in grp_name)
+                if looks_like_raw and live_name:
+                    #self.logger.info(f"🛠 Normalizing GROUP_Name for '{dev.name}' → '{live_name}' (was '{grp_name}')")
+                    dev.updateStateOnServer("GROUP_Name", live_name)
+            except Exception as e:
+                self.logger.debug(f"GROUP_Name normalize failed for {dev.name}: {e}")
+
+            # ⚠️ Extra visibility when IP→SoCo mapping is missing
+            if ip and not soco:
+                self.logger.debug(f"🧭 No SoCo mapping in soco_by_ip for {dev.name} ({ip})")
+
+
+
+
+
+
+
+
+
 
             sub_group = dev.states.get("GROUP_Name", "")
             if not sub_group or sub_group == "Unavailable":
+
+                #name, number, ver, ip, uuid = self.get_model_meta(dev)
+                #self.logger.warning(f"{dev.name}: model={name} number={number} ver={ver} ip={ip} uuid={uuid}")
+
+                #self.logger.warning(f"⚠️ So I am a sub ... so what ... {dev.name} model name =  this current group '{sub_group}'")
+                #self.logger.debug(f"🔎 Bonded resolve: {dev.name} ip={ip} live_group={getattr(live_group,'uid',None)} live_coord={getattr(live_coord,'uid',None)} live_name='{live_name}'")
                 continue
 
             # Attempt to find coordinator for this sub's group
@@ -7147,7 +7336,7 @@ class SonosPlugin(object):
                     break
 
             if not coordinator:
-                self.logger.debug(f"⚠️ Could not find coordinator for Sub device '{dev.name}' in group '{sub_group}'")
+                self.logger.info(f"⚠️ Must be first initialization loop - Could not find coordinator for Sub device '{dev.name}' in group '{sub_group}' - This is normal during startup")
                 continue
 
             coord_grouped = coordinator.states.get("Grouped", "false")
@@ -7202,17 +7391,135 @@ class SonosPlugin(object):
                 self.updateStateOnServer(dev, "Grouped", coord_grouped)
 
             if dev.states.get("GROUP_Coordinator", "true") == "true":
-                #self.logger.info(f"🔄 Setting bonded '{dev.name}' as non-coordinator")
+                self.logger.info(f"🔄 Setting bonded '{dev.name}' as non-coordinator")
                 self.updateStateOnServer(dev, "GROUP_Coordinator", "false")
 
 
-            
+    def get_model_meta(self, thing):
+        """Return (model_name, model_number, software_ver, ip, uuid) for either a SoCo object or Indigo device."""
+        soco = None
+        ip = uuid = "Unknown"
+        if hasattr(thing, "speaker_info"):  # SoCo
+            soco = thing
+        else:
+            ip = (getattr(thing, "pluginProps", {}).get("address") or "").strip()
+            if ip and ip.lower() != "none":
+                soco = self.soco_by_ip.get(ip)
+
+        model_name = model_number = software_ver = "Unknown"
+        if soco:
+            try:
+                ip = getattr(soco, "ip_address", ip) or ip
+                uuid = getattr(soco, "uid", uuid) or uuid
+                info = getattr(soco, "speaker_info", None) or {}
+                model_name   = info.get("model_name")   or getattr(soco, "model_name", "Unknown")
+                model_number = info.get("model_number") or getattr(soco, "model_number", "Unknown")
+                software_ver = info.get("display_version", "Unknown")
+            except Exception as e:
+                self.logger.debug(f"get_model_meta: speaker_info fetch failed for {ip}: {e}")
+        return model_name, model_number, software_ver, ip, uuid            
                 
 
 
 #################################################################################################
 ### End - Evaluate_and_update_grouped_states
 #################################################################################################
+
+
+    def get_model_meta(self, dev):
+        """
+        Safe model info fetch. Returns (model_name, model_number, display_version, ip, uuid)
+        Works even when SoCo isn't resolved; never raises.
+        """
+        model_name = "Unknown"
+        model_number = "Unknown"
+        display_version = "Unknown"
+        ip = ""
+        uuid = ""
+
+        soco, ip_guess = self._resolve_soco_from_device(dev)
+        ip = ip_guess or ip
+
+        if soco:
+            try:
+                info = getattr(soco, "speaker_info", None) or {}
+                # Common SoCo keys, with fallbacks
+                model_name = info.get("model_name") or info.get("name") or model_name
+                model_number = info.get("model_number") or info.get("hardware_version") or model_number
+                display_version = (info.get("display_version")
+                                   or info.get("software_version")
+                                   or display_version)
+                ip = getattr(soco, "ip_address", ip) or ip
+                uuid = getattr(soco, "uid", "") or uuid
+            except Exception as e:
+                self.logger.debug(f"get_model_meta: speaker_info read failed for {dev.name}: {e}")
+
+        # Final fallbacks from Indigo states if still empty
+        try:
+            if not uuid:
+                uuid = dev.states.get("uuid") or dev.states.get("UID") or ""
+        except Exception:
+            pass
+
+        return model_name, model_number, display_version, ip, uuid
+
+
+
+
+
+
+    def _resolve_soco_from_device(self, dev):
+        """
+        Return (soco, ip) for an Indigo device.
+        Tries pluginProps address, then device states, then UUID, then name match.
+        Never throws; returns (None, ip_guess) if not found.
+        """
+        ip = ""
+        try:
+            ip = (dev.pluginProps.get("address") or dev.states.get("IP") or "").strip()
+        except Exception:
+            pass
+
+        soco = None
+        if ip:
+            soco = self.soco_by_ip.get(ip)
+
+        # Try by UUID if available
+        if soco is None:
+            uuid = None
+            try:
+                uuid = (dev.states.get("uuid")
+                        or dev.states.get("UID")
+                        or dev.states.get("zUID")
+                        or dev.states.get("uID"))
+            except Exception:
+                uuid = None
+            if uuid:
+                try:
+                    soco = self.get_soco_by_uuid(uuid)
+                    if soco is not None:
+                        ip = getattr(soco, "ip_address", ip) or ip
+                except Exception:
+                    pass
+
+        # Fallback: name match against known SoCo objects
+        if soco is None:
+            dev_name = (dev.name or "").strip().lower()
+            zone_hint = (dev.states.get("zoneName", "") or "").strip().lower()
+            for s in self.soco_by_ip.values():
+                try:
+                    pn = (s.player_name or "").strip().lower()
+                    if pn and (pn == dev_name or pn == zone_hint):
+                        soco = s
+                        ip = getattr(soco, "ip_address", ip) or ip
+                        break
+                except Exception:
+                    continue
+
+        return soco, ip
+
+
+
 
 
 
@@ -7386,13 +7693,14 @@ class SonosPlugin(object):
             self.logger.warning("✅ BOOTSTRAP: finished post-startup normalization")
 
 
-
-                
-
     def refresh_group_topology_after_plugin_zone_change(self):
         #self.logger.warning("🔁 Manually refreshing group topology after plugin-initiated zone change...")
 
         try:
+            # NEW: ensure coordinator-by-IP map exists on the instance for downstream use
+            if not hasattr(self, "_eval_coord_dev_by_ip") or not isinstance(getattr(self, "_eval_coord_dev_by_ip"), dict):
+                self._eval_coord_dev_by_ip = {}
+
             import http.client as httplib
             import xml.etree.ElementTree as ET
 
@@ -7457,7 +7765,7 @@ class SonosPlugin(object):
                 return groups
 
             #for ip in self.soco_by_ip.keys():
-            for ip in list(self.soco_by_ip.keys()):                
+            for ip in list(self.soco_by_ip.keys()):
                 raw_xml = get_zone_group_state_from_player(ip)
                 if raw_xml:
                     parsed = parse_zone_group_state(raw_xml)
@@ -7472,6 +7780,14 @@ class SonosPlugin(object):
             if hasattr(self, "rebuild_uuid_maps_from_soco"):
                 self.rebuild_uuid_maps_from_soco()
                 self.logger.warning(f"📌 DEBUG: uuid_to_indigo_device now contains {len(self.uuid_to_indigo_device)} entries")
+
+            # NEW: ensure IP→coordinator device cache always exists (avoids NameError downstream)
+            try:
+                if not hasattr(self, "_eval_coord_dev_by_ip") or self._eval_coord_dev_by_ip is None:
+                    self._eval_coord_dev_by_ip = {}
+            except Exception:
+                # Failsafe: guarantee a dict even if an unexpected type is present
+                self._eval_coord_dev_by_ip = {}
 
             #self.logger.info("📣 Calling evaluate_and_update_grouped_states() after ZoneGroupTopology change...")
             self.evaluate_and_update_grouped_states()
