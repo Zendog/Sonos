@@ -576,7 +576,7 @@ class SonosPlugin(object):
                                           "SetAVTransportURI",
                                           f"<CurrentURI>x-rincon-queue:{dev.states['ZP_LocalUID']}#0</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
                             #DT_Test
-                            self.logger.warning(f"Lets build group coordinator tracker directlly from SOCO UUID ... DT_Test")
+                            #self.logger.warning(f"Lets build group coordinator tracker directlly from SOCO UUID ... DT_Test")
                             self.refresh_group_topology_after_plugin_zone_change()
                             self.refresh_all_group_states()
                             self.evaluate_and_update_grouped_states()
@@ -1218,7 +1218,7 @@ class SonosPlugin(object):
                     self.refresh_all_group_states()
 
                 self.refresh_all_group_states()
-                self.logger.info(f"✅ tried refresh at end of 1st add to set base cache ???? ")
+                self.logger.debug(f"✅ tried refresh at end of 1st add to set base cache ???? ")
                 return
 
             elif action_id == "setStandalone":
@@ -2772,6 +2772,7 @@ class SonosPlugin(object):
     ### Dump Groups To Log by logical group
     ############################################################################################
 
+
     def dump_by_logical_group(self):
         """
         Dumps the plugin-evaluated logical group state summary.
@@ -2781,10 +2782,12 @@ class SonosPlugin(object):
             return
 
         self.logger.info("\n🔍 Evaluated Grouped Logic Summary (plugin-level view):")
-        summary_col_widths = [32, 26, 8, 20, 20]
+
+        # Widen Bonded and Evaluated columns a bit for emoji stability
+        summary_col_widths = [32, 26, 12, 23, 20]
         summary_total_width = sum(summary_col_widths)
-        header_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
-        row_fmt = "{:<32} {:<26} {:<8} {:<20} {:<20}"
+        header_fmt = "{:<32} {:<26} {:<12} {:<23} {:<20}"
+        row_fmt    = "{:<32} {:<26} {:<12} {:<23} {:<20}"
 
         self.logger.info("")
         self.logger.info(header_fmt.format(
@@ -2811,22 +2814,52 @@ class SonosPlugin(object):
                 except Exception:
                     pass
 
+                # Coordinator vs slave
                 is_coord = indigo_dev.states.get("GROUP_Coordinator", "false") == "true"
                 role = "Master (Coordinator)" if is_coord else "Slave"
-                bonded = "sub" in indigo_dev.name.lower()
-                grouped = indigo_dev.states.get("Grouped", "?")
-                group_name = indigo_dev.states.get("GROUP_Name") or self.group_name_by_device_id.get(indigo_dev.id, "?")
 
-                emoji_prefix = "🔹" if is_coord else "  "
-                bonded_display = "🎯 True" if bonded else "False"
+                # Bonded detection (prefer states, else name heuristic)
+                bonded_state = (
+                    indigo_dev.states.get("GROUP_Bonded", None) or
+                    indigo_dev.states.get("Bonded",       None)
+                )
+                if isinstance(bonded_state, str):
+                    bonded_bool = (bonded_state.lower() == "true")
+                elif isinstance(bonded_state, bool):
+                    bonded_bool = bonded_state
+                else:
+                    name_lc = indigo_dev.name.lower()
+                    bonded_bool = any(t in name_lc for t in ("sub", "left", "right", "surround"))
+
+                # Bonded display — add a leading space for bonded *slaves* to visually match coordinators
+                bonded_display = "🎯 True" if bonded_bool else "◻️ False"
+                if bonded_bool and not is_coord:
+                    bonded_display = " " + bonded_display  # ← nudge bonded slaves right by 1
+
+                # Post-pad to stabilize width (emoji can render narrow/wide depending on font)
+                target_len = 10
+                if len(bonded_display) < target_len:
+                    bonded_display = bonded_display + (" " * (target_len - len(bonded_display)))
+
+                # Grouped display (light padding to stabilize)
+                grouped = indigo_dev.states.get("Grouped", "?")
                 grouped_display = (
                     "✅ true" if grouped in (True, "true") else
                     "❌ false" if grouped in (False, "false") else
                     f"❓ {grouped}"
                 )
+                if len(grouped_display) < 9:
+                    grouped_display = grouped_display + (" " * (9 - len(grouped_display)))
+
+                # Group name
+                group_name = indigo_dev.states.get("GROUP_Name") or self.group_name_by_device_id.get(indigo_dev.id, "?")
+
+                # Name prefix icon (coordinator vs non-coordinator)
+                name_prefix = "🔹" if is_coord else "▫️"
+                name_cell = f"{name_prefix}{indigo_dev.name}"
 
                 self.logger.info(row_fmt.format(
-                    emoji_prefix + indigo_dev.name.ljust(summary_col_widths[0] - 2),
+                    name_cell,
                     role,
                     bonded_display,
                     grouped_display,
@@ -3134,8 +3167,7 @@ class SonosPlugin(object):
         self._eval_grouped_by_coord_ip = _eval_grouped_by_coord_ip
 
         # Final visibility
-        self.logger.warning(f"💾 zone_group_state_cache groups={len(groups)} coord_ip_map={len(_eval_coord_dev_by_ip)}")
-
+        self.logger.debug(f"💾 zone_group_state_cache groups={len(groups)} coord_ip_map={len(_eval_coord_dev_by_ip)}")
         self.logger.debug("🔁 Exiting Refresh_all_group_states")
         #self.evaluate_and_update_grouped_states()
 
@@ -6048,7 +6080,7 @@ class SonosPlugin(object):
                                 return
 
                             self.zone_group_state_cache = copy.deepcopy(parsed_groups)
-                            #self.logger.info(f"💾 zone_group_state_cache updated 1 with {len(parsed_groups)} group(s)")
+                            self.logger.debug(f"💾 zone_group_state_cache updated 1 with {len(parsed_groups)} group(s)")
 
                         for group_id, data in parsed_groups.items():
                             for m in data["members"]:
@@ -6125,14 +6157,14 @@ class SonosPlugin(object):
                                         self.update_album_artwork(event_obj=None, dev=coord_dev_ref, zone_ip=coord_ip)
                                     except Exception as art_err:
                                         self.logger.warning(f"⚠️ Artwork propagation skipped for {coord_dev_ref.name} ({coord_ip}): {art_err}")
-                                else:
-                                    # 🚫 Only warn when there is actual grouping beyond bonded members
-                                    if non_bonded_count < 2:
-                                        self.logger.info(
-                                            "⚠️ Grouped state drift detected 1 ZGT — This is ok during initialization - "
-                                            f"Indigo.Grouped={grouped_flag}, SoCo.non_bonded_members>1=True, "
-                                            f"coord_ip={coord_ip}, all_members={all_member_ips}, bonded={bonded_member_ips}"
-                                        )
+#                               else:
+#                                    # 🚫 Only warn when there is actual grouping beyond bonded members
+#                                    if non_bonded_count < 2:
+#                                        self.logger.info(
+#                                            "⚠️ Grouped state drift detected 1 ZGT — This is ok during initialization - "
+#                                            f"Indigo.Grouped={grouped_flag}, SoCo.non_bonded_members>1=True, "
+#                                            f"coord_ip={coord_ip}, all_members={all_member_ips}, bonded={bonded_member_ips}"
+#                                        )
                         except Exception as hook_err:
                             self.logger.warning(f"⚠️ Failed to invoke artwork propagation after ZGT: {hook_err}")
 
@@ -6278,7 +6310,7 @@ class SonosPlugin(object):
                 soco_device = self.getSoCoDeviceByIP(indigo_device.address)
                 if soco_device:
                     self.refresh_group_membership(indigo_device, soco_device)
-                    self.logger.info(f"🔁 Active group detected — forcing master/slave state updates for {indigo_device.name}")      
+                    #self.logger.info(f"🔁 Active group detected — forcing master/slave state updates for {indigo_device.name}")      
                     self.refresh_group_topology_after_plugin_zone_change()
                     #self.evaluate_and_update_grouped_states()
                 else:
@@ -7581,7 +7613,7 @@ class SonosPlugin(object):
                 self.updateStateOnServer(dev, "Grouped", coord_grouped)
 
             if dev.states.get("GROUP_Coordinator", "true") == "true":
-                self.logger.info(f"🔄 Setting bonded '{dev.name}' as non-coordinator")
+                #self.logger.info(f"🔄 Setting bonded '{dev.name}' as non-coordinator")
                 self.updateStateOnServer(dev, "GROUP_Coordinator", "false")
 
 
@@ -7961,7 +7993,7 @@ class SonosPlugin(object):
                     parsed = parse_zone_group_state(raw_xml)
                     if parsed:
                         self.zone_group_state_cache = parsed
-                        self.logger.info(f"💾 zone_group_state_cache updated 2 with {len(parsed)} group(s)")
+                        self.logger.debug(f"💾 zone_group_state_cache updated 2 with {len(parsed)} group(s)")
                         break
 
             # 🔄 Rebuild critical mappings before group state evaluation
@@ -8236,9 +8268,10 @@ class SonosPlugin(object):
         soco_grouped_nonbonded = (len(set(non_bonded_ips)) > 1)
 
         # 🔧 Corrected drift condition: compare Indigo.Grouped to SoCo NON-BONDED grouping
-        if (coordinator_grouped_flag == "true" and not soco_grouped_nonbonded) or \
-           (coordinator_grouped_flag != "true" and soco_grouped_nonbonded):
-            self.logger.info(f"✅ ")
+        #if (coordinator_grouped_flag == "true" and not soco_grouped_nonbonded) or \
+        #   (coordinator_grouped_flag != "true" and soco_grouped_nonbonded):
+
+        #   self.logger.info(f"✅ ")
             #self.logger.info(
             #    "⚠️ Grouped state drift detected in artwork called function — This is ok during initialization - "
             #    f"Indigo.Grouped={coordinator_grouped_flag}, SoCo.non_bonded_members>1={soco_grouped_nonbonded}, "
