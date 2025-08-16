@@ -430,12 +430,14 @@ class SonosPlugin(object):
         # ✅ Rebuild uuid_to_indigo_device mapping
         for dev in indigo.devices.iter("com.ssi.indigoplugin.Sonos"):
             soco = self.soco_devices.get(dev.address)
+            ## Will set group_name here break things or fix early on issues? DT
+            group_name = dev.states.get("GROUP_Name") or self.group_name_by_device_id.get(dev.id, "?")
+            self.logger.warning(f"⚠️ I set Group_Name early on to initialize for Londonmark script: Name= '{group_name}' Address= '{dev.address}'")            
             if soco:
                 try:
                     self.uuid_to_indigo_device[soco.uid] = dev
                 except Exception as e:
                     self.logger.warning(f"⚠️ Could not map UUID for device '{dev.name}': {e}")
-
 
 
 
@@ -2772,7 +2774,6 @@ class SonosPlugin(object):
     ### Dump Groups To Log by logical group
     ############################################################################################
 
-
     def dump_by_logical_group(self):
         """
         Dumps the plugin-evaluated logical group state summary.
@@ -2783,22 +2784,39 @@ class SonosPlugin(object):
 
         self.logger.info("\n🔍 Evaluated Grouped Logic Summary (plugin-level view):")
 
-        # Widen Bonded and Evaluated columns a bit for emoji stability
-        summary_col_widths = [32, 26, 12, 23, 20]
-        summary_total_width = sum(summary_col_widths)
-        header_fmt = "{:<32} {:<26} {:<12} {:<23} {:<20}"
-        row_fmt    = "{:<32} {:<26} {:<12} {:<23} {:<20}"
+        # Absolute column widths for fixed starts
+        DEVICE_W  = 33  # prefix + name cell (you said this already lines up fine)
+        ROLE_W    = 27
+        BONDED_W  = 12
+        GROUPED_W = 20
+        GNAME_W   = 22
+        TOTAL_W   = DEVICE_W + ROLE_W + BONDED_W + GROUPED_W + GNAME_W
 
+        # Small helper to pad (or truncate) any cell to an exact width
+        def _pad(cell: str, width: int) -> str:
+            s = cell if cell is not None else ""
+            if len(s) < width:
+                s = s + (" " * (width - len(s)))
+            else:
+                s = s[:width]
+            return s
+
+        # Header
         self.logger.info("")
-        self.logger.info(header_fmt.format(
-            "Device Name", "Role", "Bonded", "Evaluated Grouped", "Group Name"
-        ))
-        self.logger.info("=" * summary_total_width)
+        header = (
+            _pad("Device Name", DEVICE_W) +
+            _pad("Role",        ROLE_W) +
+            _pad("Bonded",      BONDED_W) +
+            _pad("Logical Group", GROUPED_W) +
+            _pad("Group Name",  GNAME_W)
+        )
+        self.logger.info(header)
+        self.logger.info("=" * TOTAL_W)
         self.logger.info("")
 
         for coordinator_name, dev_list in sorted(self.evaluated_group_members_by_coordinator.items()):
             self.logger.info(f"🎧 Group: {coordinator_name}")
-            self.logger.info("-" * summary_total_width)
+            self.logger.info("-" * TOTAL_W)
 
             for indigo_dev in sorted(dev_list, key=lambda d: d.name.lower()):
                 # 🔬 Drift check (diagnostic only; no behavior change)
@@ -2831,42 +2849,48 @@ class SonosPlugin(object):
                     name_lc = indigo_dev.name.lower()
                     bonded_bool = any(t in name_lc for t in ("sub", "left", "right", "surround"))
 
-                # Bonded display — add a leading space for bonded *slaves* to visually match coordinators
                 bonded_display = "🎯 True" if bonded_bool else "◻️ False"
-                if bonded_bool and not is_coord:
-                    bonded_display = " " + bonded_display  # ← nudge bonded slaves right by 1
 
-                # Post-pad to stabilize width (emoji can render narrow/wide depending on font)
-                target_len = 10
-                if len(bonded_display) < target_len:
-                    bonded_display = bonded_display + (" " * (target_len - len(bonded_display)))
-
-                # Grouped display (light padding to stabilize)
+                # Grouped display
                 grouped = indigo_dev.states.get("Grouped", "?")
                 grouped_display = (
                     "✅ true" if grouped in (True, "true") else
                     "❌ false" if grouped in (False, "false") else
                     f"❓ {grouped}"
                 )
-                if len(grouped_display) < 9:
-                    grouped_display = grouped_display + (" " * (9 - len(grouped_display)))
 
                 # Group name
                 group_name = indigo_dev.states.get("GROUP_Name") or self.group_name_by_device_id.get(indigo_dev.id, "?")
 
-                # Name prefix icon (coordinator vs non-coordinator)
-                name_prefix = "🔹" if is_coord else "▫️"
+                # Name prefix — coordinator vs non-coordinator
+                # (You said name column lines up, so we leave it alone.)
+                name_prefix = "🔹 " if is_coord else "▫️ "
                 name_cell = f"{name_prefix}{indigo_dev.name}"
 
-                self.logger.info(row_fmt.format(
-                    name_cell,
-                    role,
-                    bonded_display,
-                    grouped_display,
-                    group_name
-                ))
+                # ✅ Visual correction: when the row is a SLAVE, nudge ALL subsequent columns
+                # (Role / Bonded / Evaluated / Group Name) 1 space to the RIGHT so their
+                # starting character matches the coordinator rows exactly.
+                slave_offset = " " if not is_coord else ""
+
+                # Build the fixed-width row by concatenation (absolute starts)
+                line = (
+                    _pad(name_cell, DEVICE_W) +
+                    _pad(slave_offset + role,           ROLE_W)   +
+                    _pad(slave_offset + bonded_display, BONDED_W) +
+                    _pad(slave_offset + grouped_display,GROUPED_W)+
+                    _pad(slave_offset + group_name,     GNAME_W)
+                )
+                self.logger.info(line)
 
             self.logger.info("")
+
+
+
+
+
+
+
+
 
 
 
